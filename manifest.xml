@@ -1,0 +1,14 @@
+<package>
+  <description brief="ros_sql">
+
+     ros_sql
+
+  </description>
+  <author>Andrew Straw</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/ros_sql</url>
+
+</package>
+
+
