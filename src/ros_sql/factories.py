@@ -39,10 +39,13 @@ def sql2msg(topic_name,result):
     d.pop('id')
 
     for key in d.keys():
-        if key.endswith('_id'):
+        if key.endswith('_id'):  # this is a hack. how to dereference properly?
             print 'key',key
             field_name = key[:-3] # this is a hack. how to dereference properly?
             print 'field_name',field_name
+            if not hasattr(result,field_name): # a hack on a hack
+                # no, this isn't a reference to another table
+                continue
             field = getattr(result,field_name)
             print 'field',field
             new_topic = topic_name + '.' + field_name
@@ -52,6 +55,22 @@ def sql2msg(topic_name,result):
             d.pop(key)
             d[field_name] = new_msg
             # print 'fk',fk
+
+    for key in d.keys():
+        if key.endswith('_secs'):
+            # hack to detect encoded time: 2 fields with same name execpt ending
+            name = key[:-5]
+
+            name_sec = name + '_secs'
+            name_nsec = name + '_nsecs'
+            if not name_nsec in d:
+                continue
+            time_sec = d.pop(name_sec)
+            time_nsec = d.pop(name_nsec)
+            value = rospy.Time(time_sec,time_nsec)
+            assert name not in d
+            d[name] = value
+
     msg_class_name = schema.get_msg_name(topic_name)
     MsgClass = get_msg_class(msg_class_name)
     msg = MsgClass(**d)
@@ -77,6 +96,10 @@ def msg2dict(topic_name,msg):
         if _type in type_map:
             # simple type
             result[name] = value
+        elif _type=='time':
+            # special case for time type
+            result[name+'_secs'] = value.secs
+            result[name+'_nsecs'] = value.nsecs
         elif _type.endswith('[]'):
             # array type
             raise NotImplementedError
