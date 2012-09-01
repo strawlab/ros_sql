@@ -8,6 +8,10 @@
   <license>BSD</license>
   <review status="unreviewed" notes=""/>
   <url>http://ros.org/wiki/ros_sql</url>
+  <depend package="rospy"/>
+  <depend package="rosmsg"/>
+  <depend package="rostopic"/>
+  <depend package="std_msgs"/>
 
 </package>
 

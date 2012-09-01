@@ -1,0 +1,142 @@
+#!/usr/bin/env python
+import argparse
+import StringIO
+import sys, time
+import Queue
+
+import elixir
+
+import roslib
+roslib.load_manifest('ros_sql')
+import rospy
+import ros_sql.ros2sql as ros2sql
+import rostopic
+import rosgraph.masterapi
+
+class Recorder:
+    def __init__(self,topics,all=False):
+        rospy.init_node('sql_recorder', anonymous=True)
+
+        if all:
+            assert len(topics)==0
+            master = rosgraph.masterapi.Master('/rostopic')
+            try:
+                state = master.getSystemState()
+                pubs, subs, _ = state
+                for t, l in pubs:
+                    topics.append(t)
+            except socket.error:
+                raise rostopic.ROSTopicIOException(
+                    "Unable to communicate with master!")
+
+        texts = []
+        class_names = []
+        table_names = []
+        topic2schema_name = {}
+        for topic in topics:
+            msg_class, _, _ = \
+                       rostopic.get_topic_class(topic, blocking=True)
+            rx = ros2sql.generate_schema_text(topic, msg_class,
+                                              top=True)
+
+            topic2schema_name[topic] = rx['class_name']
+            class_names.extend(rx['class_names'])
+            table_names.extend(rx['table_names'])
+            if len(class_names) != len(set(class_names)):
+                raise ValueError('topic %s requires class (one of %r) that '
+                                 'clashes with existing class name'%(topic,c))
+            if len(table_names) != len(set(table_names)):
+                raise ValueError('topic %s requires SQL table (one of %r) that '
+                                 'clashes with existing table name'%(topic,tns))
+            texts.append( rx['schema_text'] )
+
+        fd = StringIO.StringIO()
+        text = '\n'.join(texts)
+        ros2sql.write_schema( fd, text, class_names )
+        fd.seek(0)
+        schema_file_buf = fd.read()
+        del fd
+
+        if 1:
+            fname = 'schema.py'
+            with open(fname,mode='w') as fd:
+                fd.write(schema_file_buf)
+
+        schema_ns = {}
+        if 1:
+            exec schema_file_buf in schema_ns
+        elif 0:
+            execfile(fname,schema_ns)
+        else:
+            import importlib
+            schema = importlib.import_module('schema')
+            for name in class_names:
+                schema_ns[name] = getattr(schema,name)
+
+        # now generate factory text
+        for topic in topics:
+            msg_class, _, _ = \
+                       rostopic.get_topic_class(topic, blocking=True)
+            fx = ros2sql.generate_factory_text(topic, msg_class)
+
+        classes = dict( [(name,schema_ns[name]) for name in class_names ])
+        self.topic2schema = dict([(topic, classes[topic2schema_name[topic]]) for topic in topics])
+
+        # start elixer operations on schema
+        elixir.metadata.bind = "sqlite:///:memory:"
+        #elixir.metadata.bind.echo = True
+        elixir.setup_all()
+        elixir.create_all()
+
+        self.q = Queue.Queue()
+        for topic in topics:
+            msg_class, _, _ = \
+                       rostopic.get_topic_class(topic, blocking=True)
+            rospy.Subscriber( topic, msg_class, callback=self.cb,
+                              callback_args=topic)
+
+    def cb(self, msg, topic):
+        now = rospy.get_rostime()
+        self.q.put( (now,msg,topic) )
+
+    def run(self):
+        while not rospy.is_shutdown():
+            (now,msg,topic) = self.q.get()
+            _class = self.topic2schema[topic]
+            instance = _class(record_stamp_secs=now.secs,
+                              record_stamp_nsecs=now.nsecs,
+                              )
+            row_factory = self.topic2factory[topic]
+            row_factory(now,msg)
+            elixir.session.commit()
+
+def record(args):
+    if args.all and len(args.topic):
+        print >> sys.stderr, 'Use of --all and individual topic names mutually exclusive'
+        sys.exit(1)
+    if not len(args.topic) and not args.all:
+        print >> sys.stderr, 'Neither --all nor individual topic name(s) given. Nothing to do.'
+        sys.exit(1)
+    r = Recorder(args.topic,all=args.all)
+    r.run()
+
+def main():
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(title='commands')
+
+    parser_record = subparsers.add_parser('record',
+                                          help='record ros topics to SQL')
+    parser_record.add_argument('-a','--all',action='store_true',default=False,
+                               help='record all topics')
+    parser_record.add_argument('topic', nargs='*',
+                               help='topic name(s) to be recorded')
+    parser_record.set_defaults(func=record)
+
+    # use argparse, but only after ROS did its thing
+    argv = rospy.myargv()
+    args = parser.parse_args(argv[1:])
+
+    args.func(args)
+
+if __name__=='__main__':
+    main()
