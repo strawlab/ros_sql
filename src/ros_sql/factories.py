@@ -3,6 +3,8 @@ import time
 import importlib
 import schema
 
+from type_map import type_map
+
 import roslib; roslib.load_manifest('rospy'); import rospy
 
 def msg2sql(topic_name, msg,timestamp=None,session=None):
@@ -55,8 +57,6 @@ def sql2msg(topic_name,result):
     msg = MsgClass(**d)
     results['msg'] = msg
     return results
-
-type_map = {'int32': 'Integer()', 'int16': 'Integer()', 'string': 'String()', 'uint8': 'SmallInteger(unsigned=True)', 'byte': 'SmallInteger(unsigned=True)', 'int8': 'SmallInteger()', 'uint64': 'BigInteger(unsigned=True)', 'float64': 'Float(precision=64)', 'uint16': 'Integer(unsigned=True)', 'int64': 'BigInteger()', 'uint32': 'Integer(unsigned=True)', 'float32': 'Float(precision=32)'}
 
 def insert_row( topic_name, name, value ):
     name2 = topic_name + '.' + name

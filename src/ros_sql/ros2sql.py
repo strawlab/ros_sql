@@ -3,6 +3,8 @@ import sys
 import re
 from collections import OrderedDict
 
+from type_map import type_map
+
 import roslib
 roslib.load_manifest('rosmsg')
 import rosmsg
@@ -36,33 +38,6 @@ def namify( topic_name, mode='class'):
     elif mode=='field':
         output = topic_name.lower()
     return output
-
-type_map = {
-    'int8':
-        'SmallInteger()',
-    'uint8':
-        'SmallInteger(unsigned=True)',
-    'byte':
-        'SmallInteger(unsigned=True)',
-    'int16':
-        'Integer()',
-    'uint16':
-        'Integer(unsigned=True)',
-    'int32':
-        'Integer()',
-    'uint32':
-        'Integer(unsigned=True)',
-    'int64':
-        'BigInteger()',
-    'uint64':
-        'BigInteger(unsigned=True)',
-    'float32':
-        'Float(precision=32)',
-    'float64':
-        'Float(precision=64)',
-    'string':
-        'String()',
-    }
 
 def parse_field( topic_name, _type, source_topic_name, field_name ):
     """for a given element within a message, find the schema field type"""

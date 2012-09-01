@@ -1,0 +1,26 @@
+type_map = {
+    'int8':
+        'SmallInteger()',
+    'uint8':
+        'SmallInteger(unsigned=True)',
+    'byte':
+        'SmallInteger(unsigned=True)',
+    'int16':
+        'Integer()',
+    'uint16':
+        'Integer(unsigned=True)',
+    'int32':
+        'Integer()',
+    'uint32':
+        'Integer(unsigned=True)',
+    'int64':
+        'BigInteger()',
+    'uint64':
+        'BigInteger(unsigned=True)',
+    'float32':
+        'Float(precision=32)',
+    'float64':
+        'Float(precision=64)',
+    'string':
+        'String()',
+    }
