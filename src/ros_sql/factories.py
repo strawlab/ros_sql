@@ -9,21 +9,16 @@ def msg2sql(topic_name, msg,timestamp=None,session=None):
     '''generate commands for saving topic /test_pose'''
     if timestamp is None:
         timestamp=rospy.Time.from_sec( time.time() )
-    print "making row start"
     kwargs, atts = msg2dict(topic_name,msg)
     kwargs['record_stamp_secs']=timestamp.secs
     kwargs['record_stamp_nsecs']=timestamp.nsecs
     for name,value in atts:
         kwargs[name]=value
-    print kwargs
     klass = schema.get_class(topic_name)
     row = klass(**kwargs)
-    print "making row done"
-    print "session %r"%session
     if session is not None:
         session.add(row)
         session.commit()
-        print "commited"
 
 def sql2msg(topic_name,result):
     '''convert query result into message'''
@@ -35,14 +30,31 @@ def sql2msg(topic_name,result):
     if 'recordedentity_id' in d:
         top_level=True
         d.pop('recordedentity_id')
+    results = {}
     if top_level:
-        timestamp=rospy.Time( d.pop('record_stamp_secs'), d.pop('record_stamp_nsecs') )
+        results['timestamp']=rospy.Time( d.pop('record_stamp_secs'), d.pop('record_stamp_nsecs') )
+        d.pop('row_type')
     d.pop('id')
-    d.pop('row_type')
+
+    for key in d.keys():
+        if key.endswith('_id'):
+            print 'key',key
+            field_name = key[:-3] # this is a hack. how to dereference properly?
+            print 'field_name',field_name
+            field = getattr(result,field_name)
+            print 'field',field
+            new_topic = topic_name + '.' + field_name
+            print 'new_topic',new_topic
+            new_msg = sql2msg(new_topic, field )['msg']
+            print 'new_msg',new_msg
+            d.pop(key)
+            d[field_name] = new_msg
+            # print 'fk',fk
     msg_class_name = schema.get_msg_name(topic_name)
     MsgClass = get_msg_class(msg_class_name)
     msg = MsgClass(**d)
-    return {'timestamp':timestamp, 'msg':msg}
+    results['msg'] = msg
+    return results
 
 type_map = {'int32': 'Integer()', 'int16': 'Integer()', 'string': 'String()', 'uint8': 'SmallInteger(unsigned=True)', 'byte': 'SmallInteger(unsigned=True)', 'int8': 'SmallInteger()', 'uint64': 'BigInteger(unsigned=True)', 'float64': 'Float(precision=64)', 'uint16': 'Integer(unsigned=True)', 'int64': 'BigInteger()', 'uint32': 'Integer(unsigned=True)', 'float32': 'Float(precision=32)'}
 
@@ -56,7 +68,7 @@ def insert_row( topic_name, name, value ):
     if len(atts):
         raise NotImplementedError
     return row
-    
+
 def msg2dict(topic_name,msg):
     result = {}
     atts = []
