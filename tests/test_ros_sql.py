@@ -77,21 +77,7 @@ def check_roundtrip( topic_name, msg_class, msg_expected ):
     elixir.create_all()
     print '*'*100,'done creating schema'
 
-    fr = ros2sql.build_factories([(topic_name,msg_class)],
-                                 'schema',
-                                 schema_results['topic2class'],
-                                 )
-    if 1:
-        with open('factories.py',mode='w') as fd:
-            fd.write(fr['factory_text'])
-
-    if USE_EXEC:
-        factory_ns = {}
-        exec fr['factory_text'] in factory_ns
-        factories = Bunch(**factory_ns)
-        del factory_ns
-    else:
-        import factories
+    import ros_sql.factories as factories
 
     print '*'*100,'calling factory'
     factories.msg2sql(topic_name,msg_expected,session=elixir.session)

@@ -132,69 +132,6 @@ def dict_to_kwarg_string(kwargs):
         result.append( '%s=%r'%(k, kwargs[k]))
     return ','.join(result)
 
-def generate_factory_text( topic_name, msg_class, schema_module_name,
-                           topics2class_names, top=False):
-    print 'building factory for %r'%topic_name
-    factory_name = namify( topic_name, mode='instance')
-    schema_class_name = topics2class_names[topic_name]
-
-    buf = ''
-    if top:
-        buf += '#--------------- from topic %s\n'%topic_name
-
-    if schema_module_name:
-        schema_module = schema_module_name+'.'
-    else:
-        schema_module = ''
-
-    buf += 'def msg2sql(topic_name, msg,timestamp=None,session=None):\n'
-    buf += "    '''generate commands for saving topic %s'''\n"%topic_name
-    buf += '    if timestamp is None:\n'
-    # use time.time() instead of rospy.get_rostime() so we don't need ROS master
-    #buf += '        timestamp=rospy.get_rostime()\n'
-    buf += '        timestamp=rospy.Time.from_sec( time.time() )\n'
-    buf += '    print "making row start"\n'
-    buf += '    kwargs, atts = msg2dict(topic_name,msg)\n'
-    buf += "    kwargs['record_stamp_secs']=timestamp.secs\n"
-    buf += "    kwargs['record_stamp_nsecs']=timestamp.nsecs\n"
-    buf += "    for name,value in atts:\n"
-    buf += "        kwargs[name]=value\n"
-    buf += '    print kwargs\n'
-    buf += '    klass = %sget_class(topic_name)\n'%(schema_module,)
-    buf += '    row = klass(**kwargs)\n'
-    buf += '    print "making row done"\n'
-    buf += '    print "session %r"%session\n'
-    buf += '    if session is not None:\n'
-    buf += '        session.add(row)\n'
-    buf += '        session.commit()\n'
-    buf += '        print "commited"\n\n'
-
-    buf += 'def sql2msg(topic_name,result):\n'
-    buf += "    '''convert query result into message'''\n"
-    buf += '    print "query result: %r"%result\n'
-    buf += '    print dir(result)\n'
-    buf += '    d=result.to_dict()\n'
-    buf += '    print d\n'
-    buf += '    top_level=False\n'
-    buf += "    if 'recordedentity_id' in d:\n"
-    buf += '        top_level=True\n'
-    buf += "        d.pop('recordedentity_id')\n"
-    buf += '    if top_level:\n'
-    buf += "        timestamp=rospy.Time( d.pop('record_stamp_secs'), d.pop('record_stamp_nsecs') )\n"
-    # buf += "    for key in d.keys():\n"
-    # buf += "        if key.endswith('_id'):\n"
-    # buf += "            d.pop(key)\n"
-    buf += "    d.pop('id')\n"
-    buf += "    d.pop('row_type')\n"
-    buf += '    msg_class_name = %sget_msg_name(topic_name)\n'%(schema_module,)
-    buf += '    MsgClass = get_msg_class(msg_class_name)\n'
-    #buf += '    MsgClass = get_msg_class(%r)\n'%msg_class._type
-    buf += '    msg = MsgClass(**d)\n'
-    buf += "    return {'timestamp':timestamp, 'msg':msg}\n"
-
-    return {'factory_text':buf,
-            }
-
 def generate_schema_text( topic_name, msg_class, relationships=None, top=True,
                           known_sql_type=False):
     """convert a message type into a Python source code string"""
@@ -251,61 +188,6 @@ def generate_schema_text( topic_name, msg_class, relationships=None, top=True,
             'topics2class_names':topics2class_names,
             'topics2msg':topics2msg,
             }
-
-def _write_factories( text, schema_module_name ):
-    #result = 'from elixir import *\n'
-    result = 'import elixir\n'
-    result += 'import time\n'
-    result += 'import importlib\n'
-    result += 'import %s\n\n'%schema_module_name
-    result += "import roslib; roslib.load_manifest('rospy'); import rospy\n\n"
-    result += text
-
-    result += "\ntype_map = %r\n"%type_map
-
-    result += """
-def insert_row( topic_name, name, value ):
-    name2 = topic_name + '.' + name
-    klass = %s.get_class(name2)
-
-    kwargs, atts = msg2dict( name2, value )
-    row = klass(**kwargs)
-    # recursivley do atts
-    if len(atts):
-        raise NotImplementedError
-    return row
-    """%schema_module_name
-
-    result += """
-def msg2dict(topic_name,msg):
-    result = {}
-    atts = []
-    for name,_type in zip(msg.__slots__, msg._slot_types):
-        value = getattr(msg,name)
-        if _type in type_map:
-            # simple type
-            result[name] = value
-        elif _type.endswith('[]'):
-            # array type
-            raise NotImplementedError
-        else:
-            # compound type
-            #result[name] = msg2dict( value )
-            row = insert_row( topic_name, name, value )
-            atts.append( (name, row) )
-    return result, atts
-"""
-
-    result += """
-def get_msg_class(msg_name):
-    p1,p2 = msg_name.split('/')
-    module_name = p1+'.msg'
-    class_name = p2
-    module = importlib.import_module(module_name)
-    klass = getattr(module,class_name)
-    return klass
-"""
-    return result
 
 def _write_schemas( text, topics2class_names, topics2msg, all = None ):
     result = """from elixir import *
@@ -369,15 +251,3 @@ def build_schemas( list_of_topics_and_messages ):
             'topic2class':topics2class_names,
             'topic2msg':topics2msg,
             }
-
-def build_factories( list_of_topics_and_messages,
-                     schema_module_name, topic2class ):
-    texts = []
-    for topic_name, msg_class in list_of_topics_and_messages:
-        rx = generate_factory_text(topic_name,msg_class,
-                                   schema_module_name, topic2class)
-        texts.append( rx['factory_text'] )
-
-    text = '\n'.join(texts)
-    final_text = _write_factories(text, schema_module_name)
-    return {'factory_text':final_text}
