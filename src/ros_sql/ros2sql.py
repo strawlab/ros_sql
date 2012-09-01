@@ -74,8 +74,8 @@ def parse_field( topic_name, _type, source_topic_name, field_name ):
                 relationships=[(my_instance_name,
                                 'ManyToOne(%r,inverse=%r,%s)'%(
                 my_class_name,other_instance_name,RELATIONSHIPS))] )
-        results = {'assign':'OneToMany(%r,inverse=%r,%s)'%(
-            other_class_name,my_instance_name,RELATIONSHIPS),
+        results = {'assign':'OneToMany(%r,inverse=%r)'%(
+            other_class_name,my_instance_name),
                    'text':rx['schema_text'],
                    'classes':rx['class_names'],
                    'tables':rx['table_names'],
