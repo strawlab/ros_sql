@@ -36,10 +36,10 @@ def test_simple_message_roundtrip():
     pose1.position.y = 2
     pose1.position.z = 3
 
-    pose1.orientation.x = 0
+    pose1.orientation.x = -0.01
     pose1.orientation.y = 0
     pose1.orientation.z = 0
-    pose1.orientation.w = 1
+    pose1.orientation.w = 4.56
 
     pa1 = geometry_msgs.msg.PoseArray()
     pa1.header.seq = 938
@@ -48,10 +48,10 @@ def test_simple_message_roundtrip():
     pa1.header.frame_id = 'my frame'
     pa1.poses.append( pose1 )
 
-    for tn,mc,md in [('/test_string',std_msgs.msg.String, std_msgs.msg.String('xyz')),
+    for tn,mc,md in [#('/test_string',std_msgs.msg.String, std_msgs.msg.String('xyz')),
                      #('/test_int8', std_msgs.msg.Int8, std_msgs.msg.Int8(-4)),
                      #('/test_uint8', std_msgs.msg.UInt8, std_msgs.msg.UInt8(254)),
-                     #('/test_pose', geometry_msgs.msg.Pose, pose1),
+                     ('/test_pose', geometry_msgs.msg.Pose, pose1),
                      #('/test_pose_array', geometry_msgs.msg.PoseArray, pa1),
                      ]:
         yield check_roundtrip, tn,mc,md
@@ -93,17 +93,17 @@ def check_roundtrip( topic_name, msg_class, msg_expected ):
     else:
         import factories
 
-    factory = factories.get_factory(topic_name)
     print '*'*100,'calling factory'
-    factory(msg_expected,session=elixir.session)
+    factories.msg2sql(topic_name,msg_expected,session=elixir.session)
 
     print '*'*100,'should have made row by now'
 
     class_ = schema.get_class(topic_name)
     msg_actual_sql = class_.query.one()
 
-    reverse_factory = factories.get_reverse_factory(topic_name)
-    timestamp, msg_actual = reverse_factory( msg_actual_sql )
+    result = factories.sql2msg( topic_name, msg_actual_sql )
+    timestamp = result['timestamp']
+    msg_actual = result['msg']
 
     print
     print 'msg_actual'

@@ -105,6 +105,7 @@ def parse_field( topic_name, _type, source_topic_name, field_name ):
                    'classes':rx['class_names'],
                    'tables':rx['table_names'],
                    'topics2class_names':rx['topics2class_names'],
+                   'topics2msg':rx['topics2msg'],
                    }
     else:
         # _type is another message type
@@ -121,6 +122,7 @@ def parse_field( topic_name, _type, source_topic_name, field_name ):
                    'classes':rx['class_names'],
                    'tables':rx['table_names'],
                    'topics2class_names':rx['topics2class_names'],
+                   'topics2msg':rx['topics2msg'],
                    }
     return results
 
@@ -134,8 +136,6 @@ def generate_factory_text( topic_name, msg_class, schema_module_name,
                            topics2class_names, top=False):
     print 'building factory for %r'%topic_name
     factory_name = namify( topic_name, mode='instance')
-    forward_factory_name = 'forward_%s'%factory_name
-    reverse_factory_name = 'reverse_%s'%factory_name
     schema_class_name = topics2class_names[topic_name]
 
     buf = ''
@@ -147,18 +147,21 @@ def generate_factory_text( topic_name, msg_class, schema_module_name,
     else:
         schema_module = ''
 
-    buf += 'def %s(msg,timestamp=None,session=None):\n'%forward_factory_name
+    buf += 'def msg2sql(topic_name, msg,timestamp=None,session=None):\n'
     buf += "    '''generate commands for saving topic %s'''\n"%topic_name
     buf += '    if timestamp is None:\n'
     # use time.time() instead of rospy.get_rostime() so we don't need ROS master
     #buf += '        timestamp=rospy.get_rostime()\n'
     buf += '        timestamp=rospy.Time.from_sec( time.time() )\n'
     buf += '    print "making row start"\n'
-    buf += '    kwargs = msg2dict(msg)\n'
+    buf += '    kwargs, atts = msg2dict(topic_name,msg)\n'
     buf += "    kwargs['record_stamp_secs']=timestamp.secs\n"
     buf += "    kwargs['record_stamp_nsecs']=timestamp.nsecs\n"
-    buf += '    row = %s%s(**kwargs)\n'%(schema_module, schema_class_name)
+    buf += "    for name,value in atts:\n"
+    buf += "        kwargs[name]=value\n"
     buf += '    print kwargs\n'
+    buf += '    klass = %sget_class(topic_name)\n'%(schema_module,)
+    buf += '    row = klass(**kwargs)\n'
     buf += '    print "making row done"\n'
     buf += '    print "session %r"%session\n'
     buf += '    if session is not None:\n'
@@ -166,30 +169,30 @@ def generate_factory_text( topic_name, msg_class, schema_module_name,
     buf += '        session.commit()\n'
     buf += '        print "commited"\n\n'
 
-
-    buf += 'def %s(result):\n'%reverse_factory_name
+    buf += 'def sql2msg(topic_name,result):\n'
     buf += "    '''convert query result into message'''\n"
     buf += '    print "query result: %r"%result\n'
     buf += '    print dir(result)\n'
     buf += '    d=result.to_dict()\n'
     buf += '    print d\n'
-    buf += '    print result.data\n'
-    buf += '    print result.data\n'
-    buf += "    timestamp=rospy.Time( d.pop('record_stamp_secs'), d.pop('record_stamp_nsecs') )\n"
-    buf += "    d.pop('recordedentity_id')\n"
+    buf += '    top_level=False\n'
+    buf += "    if 'recordedentity_id' in d:\n"
+    buf += '        top_level=True\n'
+    buf += "        d.pop('recordedentity_id')\n"
+    buf += '    if top_level:\n'
+    buf += "        timestamp=rospy.Time( d.pop('record_stamp_secs'), d.pop('record_stamp_nsecs') )\n"
+    # buf += "    for key in d.keys():\n"
+    # buf += "        if key.endswith('_id'):\n"
+    # buf += "            d.pop(key)\n"
     buf += "    d.pop('id')\n"
     buf += "    d.pop('row_type')\n"
-    buf += '    MsgClass = get_msg_class(%r)\n'%msg_class._type
+    buf += '    msg_class_name = %sget_msg_name(topic_name)\n'%(schema_module,)
+    buf += '    MsgClass = get_msg_class(msg_class_name)\n'
+    #buf += '    MsgClass = get_msg_class(%r)\n'%msg_class._type
     buf += '    msg = MsgClass(**d)\n'
-    buf += '    return timestamp, msg\n'
-
-
-    topic2funcname = OrderedDict({topic_name:forward_factory_name})
-    topic2revname = OrderedDict({topic_name:reverse_factory_name})
+    buf += "    return {'timestamp':timestamp, 'msg':msg}\n"
 
     return {'factory_text':buf,
-            'topic2funcname':topic2funcname,
-            'topic2revname':topic2revname,
             }
 
 def generate_schema_text( topic_name, msg_class, relationships=None, top=True,
@@ -201,6 +204,7 @@ def generate_schema_text( topic_name, msg_class, relationships=None, top=True,
     classes = [class_name]
     tables = [table_name]
     topics2class_names = OrderedDict({topic_name: class_name})
+    topics2msg = OrderedDict({topic_name: msg_class._type})
     more_texts = []
 
     buf = ''
@@ -237,6 +241,7 @@ def generate_schema_text( topic_name, msg_class, relationships=None, top=True,
                     print "for ",topic_name+'.'+name
                     print "results['topics2class_names']: %r"%results['topics2class_names']
                     topics2class_names.update( results['topics2class_names'] )
+                    topics2msg.update( results['topics2msg'] )
     more_texts.insert(0, buf)
     final = '\n'.join(more_texts)
     return {'class_name':class_name,
@@ -244,9 +249,10 @@ def generate_schema_text( topic_name, msg_class, relationships=None, top=True,
             'class_names':classes,
             'schema_text':final,
             'topics2class_names':topics2class_names,
+            'topics2msg':topics2msg,
             }
 
-def _write_factories( text, topic2funcname, topic2revname, schema_module_name ):
+def _write_factories( text, schema_module_name ):
     #result = 'from elixir import *\n'
     result = 'import elixir\n'
     result += 'import time\n'
@@ -255,40 +261,40 @@ def _write_factories( text, topic2funcname, topic2revname, schema_module_name ):
     result += "import roslib; roslib.load_manifest('rospy'); import rospy\n\n"
     result += text
 
-    topic2funcname_buf = ''
-    for topic in topic2funcname:
-        topic2funcname_buf += '        %r:%s,\n'%(topic,topic2funcname[topic])
-
-    topic2revname_buf = ''
-    for topic in topic2revname:
-        topic2revname_buf += '        %r:%s,\n'%(topic,topic2revname[topic])
-
     result += "\ntype_map = %r\n"%type_map
 
     result += """
-def msg2dict(msg):
-    result = {}
-    for name,_type in zip(msg.__slots__, msg._slot_types):
-        if _type in type_map:
-            # simple type
-            result[name] = getattr(msg,name)
-        else:
-            raise NotImplementedError
-    return result
-"""
-    result += """
-def get_factory(topic_name):
-    d = {
-%s    }
-    return d[topic_name]
-"""%( topic2funcname_buf )
+def insert_row( topic_name, name, value ):
+    name2 = topic_name + '.' + name
+    klass = %s.get_class(name2)
+
+    kwargs, atts = msg2dict( name2, value )
+    row = klass(**kwargs)
+    # recursivley do atts
+    if len(atts):
+        raise NotImplementedError
+    return row
+    """%schema_module_name
 
     result += """
-def get_reverse_factory(topic_name):
-    d = {
-%s    }
-    return d[topic_name]
-"""%( topic2revname_buf )
+def msg2dict(topic_name,msg):
+    result = {}
+    atts = []
+    for name,_type in zip(msg.__slots__, msg._slot_types):
+        value = getattr(msg,name)
+        if _type in type_map:
+            # simple type
+            result[name] = value
+        elif _type.endswith('[]'):
+            # array type
+            raise NotImplementedError
+        else:
+            # compound type
+            #result[name] = msg2dict( value )
+            row = insert_row( topic_name, name, value )
+            atts.append( (name, row) )
+    return result, atts
+"""
 
     result += """
 def get_msg_class(msg_name):
@@ -301,7 +307,7 @@ def get_msg_class(msg_name):
 """
     return result
 
-def _write_schemas( text, topics2class_names, all = None ):
+def _write_schemas( text, topics2class_names, topics2msg, all = None ):
     result = """from elixir import *
 
 """
@@ -323,7 +329,7 @@ class RecordedEntity(Entity):
 
     result += \
 """
-#--------------- helper function
+#--------------- helper functions
 def get_class( topic_name ):
     '''get the schema for topic_name'''
     d = {
@@ -333,36 +339,45 @@ def get_class( topic_name ):
     result += '    }\n'
     result += '    return d[topic_name]\n'
 
+    result += """
+def get_msg_name( topic_name ):
+    '''get the msg name for topic_name'''
+    d = {
+"""
+    for key in topics2msg:
+        result += '        %r:%r,\n'%(key,topics2msg[key])
+    result += '    }\n'
+    result += '    return d[topic_name]\n'
+
     return result
 
 def build_schemas( list_of_topics_and_messages ):
     texts = []
     class_names = []
     topics2class_names = OrderedDict()
+    topics2msg = OrderedDict()
     for topic_name, msg_class in list_of_topics_and_messages:
         rx = generate_schema_text(topic_name,msg_class)
         texts.append( rx['schema_text'] )
         class_names.extend(rx['class_names'])
         topics2class_names.update( rx['topics2class_names'] )
+        topics2msg.update( rx['topics2msg'] )
 
     text = '\n'.join(texts)
-    final_text = _write_schemas( text, topics2class_names, all=class_names )
+    final_text = _write_schemas( text, topics2class_names, topics2msg, all=class_names )
     return {'schema_text':final_text,
-            'topic2class':topics2class_names}
+            'topic2class':topics2class_names,
+            'topic2msg':topics2msg,
+            }
 
 def build_factories( list_of_topics_and_messages,
                      schema_module_name, topic2class ):
     texts = []
-    topic2funcname = OrderedDict()
-    topic2revname = OrderedDict()
     for topic_name, msg_class in list_of_topics_and_messages:
         rx = generate_factory_text(topic_name,msg_class,
                                    schema_module_name, topic2class)
         texts.append( rx['factory_text'] )
-        topic2funcname.update( rx['topic2funcname'] )
-        topic2revname.update( rx['topic2revname'] )
 
     text = '\n'.join(texts)
-    final_text = _write_factories(text, topic2funcname, topic2revname,
-                                  schema_module_name)
+    final_text = _write_factories(text, schema_module_name)
     return {'factory_text':final_text}
