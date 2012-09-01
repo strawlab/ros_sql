@@ -11,7 +11,7 @@ import rosmsg
 import rospy
 
 INHERITANCE_TYPE = 'multi'
-RELATIONSHIPS = "onupdate='cascade',ondelete='cascade'"
+RELATIONSHIPS = "ondelete='cascade'"
 
 def capitalize(name):
     "name_with_parts -> NameWithParts"
