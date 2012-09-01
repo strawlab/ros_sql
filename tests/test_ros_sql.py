@@ -41,17 +41,21 @@ def test_simple_message_roundtrip():
     pose1.orientation.z = 0
     pose1.orientation.w = 4.56
 
+    header = std_msgs.msg.Header()
+    header.seq = 938
+    header.stamp.secs = 3928
+    header.stamp.nsecs = 9095
+    header.frame_id = 'my frame'
+
     pa1 = geometry_msgs.msg.PoseArray()
-    pa1.header.seq = 938
-    pa1.header.stamp.secs = 3928
-    pa1.header.stamp.nsecs = 9095
-    pa1.header.frame_id = 'my frame'
+    pa1.header = header
     pa1.poses.append( pose1 )
 
     for tn,mc,md in [#('/test_string',std_msgs.msg.String, std_msgs.msg.String('xyz')),
                      #('/test_int8', std_msgs.msg.Int8, std_msgs.msg.Int8(-4)),
                      #('/test_uint8', std_msgs.msg.UInt8, std_msgs.msg.UInt8(254)),
-                     ('/test_pose', geometry_msgs.msg.Pose, pose1),
+                     #('/test_pose', geometry_msgs.msg.Pose, pose1),
+                     ('/myheader', std_msgs.msg.Header, header),
                      #('/test_pose_array', geometry_msgs.msg.PoseArray, pa1),
                      ]:
         yield check_roundtrip, tn,mc,md
