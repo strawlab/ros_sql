@@ -24,54 +24,21 @@ def msg2sql(topic_name, msg,timestamp=None,session=None):
 
 def sql2msg(topic_name,result):
     '''convert query result into message'''
-    print "1st query result: %r"%result
-    print '1st result._descriptor: %r'%result._descriptor
-    print '1st dir(result._descriptor)',dir(result._descriptor)
-    print '1st result._descriptor.relationships: %r'%result._descriptor.relationships
     inverses = []
     forwards = {}
     for relationship in result._descriptor.relationships:
-        print '  relationship',relationship
-        print '  isinstance( relationship, elixir.relationships.ManyToOne )',isinstance( relationship, elixir.relationships.ManyToOne )
-        print '  isinstance( relationship, elixir.relationships.OneToMany )',isinstance( relationship, elixir.relationships.OneToMany )
-        print '  isinstance( relationship, elixir.relationships.OneToOne )',isinstance( relationship, elixir.relationships.OneToOne )
-        print
-
         if isinstance( relationship, elixir.relationships.OneToMany ):
             inverses.append( relationship )
         elif isinstance( relationship, elixir.relationships.ManyToOne ):
-            if 1:
-                print
-                print '*'*100
-                print 'relationship',relationship
-                #print 'dir(relationship)',dir(relationship)
-                #for k in dir(relationship):
-                #    print '            %r: %r'%(k, getattr(relationship,k))
-                #print '.'*100
-            if 1:
-                cnames = relationship.foreign_key
-                #print 'cnames',cnames
-                assert len(cnames)==1
-                cname = cnames[0]
-                print 'cname.name',cname.name
-                forwards[cname.name] = relationship
-                #print 'dir(cname)',dir(cname)
-                print '*'*100
-
-            if 0:
-                cnames = relationship.target_column
-                print 'cnames',cnames
-                assert len(cnames)==1
-                cname = cnames[0]
-                assert cname not in forwards
-                forwards[cname] = relationship
-                print 'adding column %r'%cname
+            cnames = relationship.foreign_key
+            assert len(cnames)==1
+            cname = cnames[0]
+            forwards[cname.name] = relationship
         elif isinstance( relationship, elixir.relationships.OneToOne ):
             pass
         else:
             raise NotImplementedError
     d=result.to_dict()
-    print d
     top_level=isinstance(result, schema.RecordedEntity)
 
     results = {}
@@ -84,32 +51,16 @@ def sql2msg(topic_name,result):
 
     for key in d.keys():
         if key in forwards:
-
-        # # XXX TODO dereference properly by using results.descriptor.relationships?
-        # if key.endswith('_id'):  # this is a hack. should dereference properly.
-            print 'key',key
             relationship = forwards[key]
-            # field_name = key[:-3] # this is a hack. should dereference properly.
-            # print 'field_name',field_name
-            # if not hasattr(result,field_name): # a hack on a hack
-            #     # no, this isn't a reference to another table
-            #     continue
             field_name = relationship.name
             field = getattr(result,field_name)
-            #print '                     relationship.name',relationship.name
-            #field = getattr(result, relationship.name)
-            print '                     field',field
             new_topic = topic_name + '.' + field_name
-            print 'new_topic',new_topic
             d.pop(key)
             if schema.have_topic(new_topic):
                 # This is a semi-hack to restrict us from going back
                 # into relationships we already went forward on.
-                print '  ...==========>>>>>> recursive call into sql2msg()'
                 new_msg = sql2msg(new_topic, field )['msg']
-                print 'new_msg',new_msg
                 d[field_name] = new_msg
-            # print 'fk',fk
 
     for key in d.keys():
         # XXX TODO use out-of-band channel to store time fields rather than name munging.
@@ -127,11 +78,7 @@ def sql2msg(topic_name,result):
             assert name not in d
             d[name] = value
 
-    try:
-        msg_class_name = schema.get_msg_name(topic_name)
-    except KeyError, e:
-        print 'bad key: %r'%topic_name
-        9238/0
+    msg_class_name = schema.get_msg_name(topic_name)
     MsgClass = get_msg_class(msg_class_name)
 
     if len(inverses):
@@ -142,27 +89,13 @@ def sql2msg(topic_name,result):
             name = inv.name
             tn2 = topic_name + '.' + name
 
-            print '----------------inverse name: %s'%name
-            print '----------------tn2: %r'%tn2
-            print '----------------relationship to sort out: %r'%inv
-
             tmp1 = getattr( result, name )
-            print ' tmp1: %r'%tmp1
             for tmp2 in tmp1:
-                print '                    tmp2: %r'%tmp2
                 value2 = sql2msg(tn2,tmp2)['msg']
                 arr.append( value2 )
 
             assert name not in d
             d[name] = arr
-
-    if 1:
-        print 'query result: %r'%result
-        print 'result._descriptor: %r'%result._descriptor
-        print 'result._descriptor.relationships: %r'%result._descriptor.relationships
-        print 'MsgClass',MsgClass
-        print 'dir(MsgClass)',dir(MsgClass)
-        print 'd',d
 
     msg = MsgClass(**d)
     results['msg'] = msg
@@ -172,16 +105,7 @@ def insert_row( topic_name, name, value ):
     name2 = topic_name + '.' + name
     klass = schema.get_class(name2)
 
-    # print 'vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv'
-    # print 'name2',name2
-    # print 'value',value
     kwargs, atts = msg2dict( name2, value )
-    # print 'kwargs'
-    # print kwargs
-    # print 'name2',name2
-    # print 'atts'
-    # print atts
-    # print '^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^'
     kw2 = {}
     for k,v in atts:
         assert k not in kwargs # not already there
@@ -189,9 +113,6 @@ def insert_row( topic_name, name, value ):
         kw2[k]=v
     kwargs.update(kw2)
     row = klass(**kwargs)
-    # recursivley do atts
-    #if len(atts):
-    #    raise NotImplementedError
     return row
 
 def msg2dict(topic_name,msg):
