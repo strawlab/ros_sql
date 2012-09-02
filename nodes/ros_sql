@@ -14,7 +14,7 @@ import rostopic
 import rosgraph.masterapi
 
 class Recorder:
-    def __init__(self,topics,all=False):
+    def __init__(self,topics,bind_url,all=False):
         rospy.init_node('sql_recorder', anonymous=True)
 
         if all:
@@ -59,7 +59,7 @@ class Recorder:
             self.factories = factories
 
         # start elixer operations on schema
-        elixir.metadata.bind = "sqlite:///:memory:"
+        elixir.metadata.bind = bind_url
         #elixir.metadata.bind.echo = True
         elixir.setup_all()
         elixir.create_all()
@@ -92,20 +92,25 @@ def record(args):
     if not len(args.topic) and not args.all:
         print >> sys.stderr, 'Neither --all nor individual topic name(s) given. Nothing to do.'
         sys.exit(1)
-    r = Recorder(args.topic,all=args.all)
+    r = Recorder(args.topic,args.bind,all=args.all)
     r.run()
 
 def main():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(title='commands')
 
+    # ------ record --------------
     parser_record = subparsers.add_parser('record',
                                           help='record ros topics to SQL')
     parser_record.add_argument('-a','--all',action='store_true',default=False,
                                help='record all topics')
+    parser_record.add_argument('-b','--bind',type=str,
+                               default='sqlite:///ros.sqlite3',
+                               help='sqlalchemy URL for database connection')
     parser_record.add_argument('topic', nargs='*',
                                help='topic name(s) to be recorded')
     parser_record.set_defaults(func=record)
+    # ----------------------------
 
     # use argparse, but only after ROS did its thing
     argv = rospy.myargv()
