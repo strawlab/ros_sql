@@ -28,7 +28,6 @@ def reset_sqlalchemy():
 
     # connect to in-memory db
     elixir.metadata.bind = "sqlite:///:memory:"
-    elixir.metadata.bind.echo = True
 
 def test_simple_message_roundtrip():
     pose1 = geometry_msgs.msg.Pose()
@@ -79,14 +78,10 @@ def check_roundtrip( topic_name, msg_class, msg_expected ):
 
     elixir.setup_all()
     elixir.create_all()
-    print '*'*100,'done creating schema'
 
     import ros_sql.factories as factories
 
-    print '*'*100,'calling factory'
     factories.msg2sql(topic_name,msg_expected,session=elixir.session)
-
-    print '*'*100,'should have made row by now'
 
     class_ = schema.get_class(topic_name)
     msg_actual_sql = class_.query.one()
@@ -95,9 +90,4 @@ def check_roundtrip( topic_name, msg_class, msg_expected ):
     timestamp = result['timestamp']
     msg_actual = result['msg']
 
-    print
-    print 'msg_actual'
-    print msg_actual
-    print 'msg_expected'
-    print msg_expected
     assert msg_actual == msg_expected

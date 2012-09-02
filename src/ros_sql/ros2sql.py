@@ -150,8 +150,6 @@ def generate_schema_text( topic_name, msg_class, relationships=None, top=True,
                     more_texts.append(results['text'])
                     classes.extend(results['classes'])
                     tables.extend( results['tables'] )
-                    print "for ",topic_name+'.'+name
-                    print "results['topics2class_names']: %r"%results['topics2class_names']
                     topics2class_names.update( results['topics2class_names'] )
                     topics2msg.update( results['topics2msg'] )
     more_texts.insert(0, buf)
