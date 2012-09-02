@@ -55,8 +55,8 @@ def test_simple_message_roundtrip():
                      #('/test_int8', std_msgs.msg.Int8, std_msgs.msg.Int8(-4)),
                      #('/test_uint8', std_msgs.msg.UInt8, std_msgs.msg.UInt8(254)),
                      #('/test_pose', geometry_msgs.msg.Pose, pose1),
-                     ('/myheader', std_msgs.msg.Header, header),
-                     #('/test_pose_array', geometry_msgs.msg.PoseArray, pa1),
+                     #('/myheader', std_msgs.msg.Header, header),
+                     ('/test_pose_array', geometry_msgs.msg.PoseArray, pa1),
                      ]:
         yield check_roundtrip, tn,mc,md
 

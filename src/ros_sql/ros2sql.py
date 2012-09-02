@@ -206,6 +206,12 @@ def get_msg_name( topic_name ):
     result += '    }\n'
     result += '    return d[topic_name]\n'
 
+    result += """
+def have_topic( topic_name ):
+    d = %r
+"""%(topics2msg.keys(),)
+    result += '    return (topic_name in d)\n'
+
     return result
 
 def build_schemas( list_of_topics_and_messages ):
