@@ -9,8 +9,8 @@ roslib.load_manifest('ros_sql')
 import rospy
 import ros_sql.ros2sql as ros2sql
 
-def msg2sql(topic_name, msg,timestamp=None,session=None):
-    '''generate commands for saving topic /test_pose'''
+def msg2sql(topic_name, msg, timestamp=None, session=None):
+    '''generate commands for saving topic'''
     if timestamp is None:
         timestamp=rospy.Time.from_sec( time.time() )
     kwargs, atts = msg2dict(topic_name,msg)
