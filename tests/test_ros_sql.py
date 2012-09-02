@@ -81,12 +81,14 @@ def check_roundtrip( topic_name, msg_class, msg_expected ):
 
     import ros_sql.factories as factories
 
+    # send to SQL
     factories.msg2sql(topic_name,msg_expected,session=elixir.session)
 
+    # get back from SQL
     class_ = schema.get_class(topic_name)
-    msg_actual_sql = class_.query.one()
+    msg_actual_sql = class_.query.one() # make actual query
+    result = factories.sql2msg( topic_name, msg_actual_sql ) # convert to ROS
 
-    result = factories.sql2msg( topic_name, msg_actual_sql )
     timestamp = result['timestamp']
     msg_actual = result['msg']
 
