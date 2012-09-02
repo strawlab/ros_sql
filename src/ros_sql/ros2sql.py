@@ -45,8 +45,6 @@ def namify( topic_name, mode='class'):
         output = topic_name.lower()
     elif mode=='instance':
         output = topic_name.lower()
-    elif mode=='field':
-        output = topic_name.lower()
     return output
 
 def parse_field( topic_name, _type, source_topic_name, field_name ):
@@ -147,7 +145,7 @@ def generate_schema_text( topic_name, msg_class, relationships=None, top=True,
             buf += '    %s = %s\n'%(name,val)
     buf += '\n'
     if known_sql_type is not None:
-        buf += '    %s = Field(%s)\n'%(namify(topic_name,mode='field')+'_data',known_sql_type)
+        buf += '    %s = Field(%s)\n'%('data',known_sql_type)
     else:
         for name, _type in zip(msg_class.__slots__, msg_class._slot_types):
             if _type=='time':

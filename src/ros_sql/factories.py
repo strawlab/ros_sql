@@ -5,6 +5,7 @@ import schema
 from type_map import type_map
 
 import roslib
+import roslib.message
 roslib.load_manifest('ros_sql')
 import rospy
 import ros_sql.ros2sql as ros2sql
@@ -84,20 +85,20 @@ def sql2msg(topic_name,result):
     MsgClass = ros2sql.get_msg_class(msg_class_name)
 
     if len(inverses):
-        # XXX TODO: how to add ManyToOne things that target this row? This
-        # is specifically for arrays.
-        for inv in inverses:
-            arr = []
-            name = inv.name
-            tn2 = topic_name + '.' + name
+        assert len(inverses)==1
+        inv = inverses[0]
 
-            tmp1 = getattr( result, name )
-            for tmp2 in tmp1:
-                value2 = sql2msg(tn2,tmp2)['msg']
-                arr.append( value2 )
+        arr = []
+        name = inv.name
+        tn2 = topic_name + '.' + name
 
-            assert name not in d
-            d[name] = arr
+        tmp1 = getattr( result, name )
+        for tmp2 in tmp1:
+            value2 = sql2msg(tn2,tmp2)['msg']
+            arr.append( value2 )
+
+        assert name not in d
+        d[name] = arr
 
     msg = MsgClass(**d)
     results['msg'] = msg
@@ -106,14 +107,16 @@ def sql2msg(topic_name,result):
 def insert_row( topic_name, name, value ):
     name2 = topic_name + '.' + name
     klass = schema.get_class(name2)
-
-    kwargs, atts = msg2dict( name2, value )
-    kw2 = {}
-    for k,v in atts:
-        assert k not in kwargs # not already there
-        assert k not in kw2 # not overwriting
-        kw2[k]=v
-    kwargs.update(kw2)
+    if isinstance(value, roslib.message.Message ):
+        kwargs, atts = msg2dict( name2, value )
+        kw2 = {}
+        for k,v in atts:
+            assert k not in kwargs # not already there
+            assert k not in kw2 # not overwriting
+            kw2[k]=v
+        kwargs.update(kw2)
+    else:
+        kwargs = {'data':value}
     row = klass(**kwargs)
     return row
 
