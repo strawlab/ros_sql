@@ -85,20 +85,18 @@ def sql2msg(topic_name,result):
     MsgClass = ros2sql.get_msg_class(msg_class_name)
 
     if len(inverses):
-        assert len(inverses)==1
-        inv = inverses[0]
+        for inv in inverses:
+            arr = []
+            name = inv.name
+            tn2 = topic_name + '.' + name
 
-        arr = []
-        name = inv.name
-        tn2 = topic_name + '.' + name
+            tmp1 = getattr( result, name )
+            for tmp2 in tmp1:
+                value2 = sql2msg(tn2,tmp2)['msg']
+                arr.append( value2 )
 
-        tmp1 = getattr( result, name )
-        for tmp2 in tmp1:
-            value2 = sql2msg(tn2,tmp2)['msg']
-            arr.append( value2 )
-
-        assert name not in d
-        d[name] = arr
+            assert name not in d
+            d[name] = arr
 
     msg = MsgClass(**d)
     results['msg'] = msg

@@ -47,6 +47,13 @@ def namify( topic_name, mode='class'):
         output = topic_name.lower()
     return output
 
+def slot_type_to_class_name(element_type):
+    # This is (obviously) a hack, but how to do it right?
+    x = element_type.capitalize()
+    if x.startswith('Uint'):
+        x = 'UInt' + x[4:]
+    return x
+
 def parse_field( topic_name, _type, source_topic_name, field_name ):
     """for a given element within a message, find the schema field type"""
     dt = type_map.get(_type,None)
@@ -65,7 +72,8 @@ def parse_field( topic_name, _type, source_topic_name, field_name ):
         element_type = _type[:-2]
         dt = type_map.get(element_type,None)
         if dt is not None:
-            msg_class = getattr(std_msgs.msg,element_type.capitalize())
+            element_class_name = slot_type_to_class_name(element_type)
+            msg_class = getattr(std_msgs.msg,element_class_name)
             # array of fundamental type
             rx = generate_schema_text(
                 topic_name, msg_class, top=False,
