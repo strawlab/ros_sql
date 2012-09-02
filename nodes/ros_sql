@@ -33,54 +33,30 @@ class Recorder:
         class_names = []
         table_names = []
         topic2schema_name = {}
+        list_of_topics_and_messages = []
         for topic in topics:
             msg_class, _, _ = \
                        rostopic.get_topic_class(topic, blocking=True)
-            rx = ros2sql.generate_schema_text(topic, msg_class,
-                                              top=True)
+            #print 'topic: %r, msg_class: %r'%(topic,msg_class)
+            list_of_topics_and_messages.append( (topic,msg_class) )
 
-            topic2schema_name[topic] = rx['class_name']
-            class_names.extend(rx['class_names'])
-            table_names.extend(rx['table_names'])
-            if len(class_names) != len(set(class_names)):
-                raise ValueError('topic %s requires class (one of %r) that '
-                                 'clashes with existing class name'%(topic,c))
-            if len(table_names) != len(set(table_names)):
-                raise ValueError('topic %s requires SQL table (one of %r) that '
-                                 'clashes with existing table name'%(topic,tns))
-            texts.append( rx['schema_text'] )
-
-        fd = StringIO.StringIO()
-        text = '\n'.join(texts)
-        ros2sql.write_schema( fd, text, class_names )
-        fd.seek(0)
-        schema_file_buf = fd.read()
-        del fd
-
+        schema_results = ros2sql.build_schemas(list_of_topics_and_messages)
         if 1:
-            fname = 'schema.py'
-            with open(fname,mode='w') as fd:
-                fd.write(schema_file_buf)
+            with open('schema.py',mode='w') as fd:
+                fd.write(schema_results['schema_text'])
 
-        schema_ns = {}
-        if 1:
-            exec schema_file_buf in schema_ns
-        elif 0:
-            execfile(fname,schema_ns)
+        USE_EXEC=False
+        if USE_EXEC:
+            schema_ns = {}
+            exec schema_results['schema_text'] in schema_ns
+            schema = Bunch(**schema_ns) # make it act like a module
+            del schema_ns
         else:
-            import importlib
-            schema = importlib.import_module('schema')
-            for name in class_names:
-                schema_ns[name] = getattr(schema,name)
+            import schema
+            self.schema = schema
 
-        # now generate factory text
-        for topic in topics:
-            msg_class, _, _ = \
-                       rostopic.get_topic_class(topic, blocking=True)
-            fx = ros2sql.generate_factory_text(topic, msg_class)
-
-        classes = dict( [(name,schema_ns[name]) for name in class_names ])
-        self.topic2schema = dict([(topic, classes[topic2schema_name[topic]]) for topic in topics])
+            import ros_sql.factories as factories
+            self.factories = factories
 
         # start elixer operations on schema
         elixir.metadata.bind = "sqlite:///:memory:"
@@ -102,13 +78,12 @@ class Recorder:
     def run(self):
         while not rospy.is_shutdown():
             (now,msg,topic) = self.q.get()
-            _class = self.topic2schema[topic]
-            instance = _class(record_stamp_secs=now.secs,
-                              record_stamp_nsecs=now.nsecs,
-                              )
-            row_factory = self.topic2factory[topic]
-            row_factory(now,msg)
-            elixir.session.commit()
+
+            self.factories.msg2sql(topic,
+                                   msg,
+                                   timestamp=now,
+                                   session=elixir.session)
+            #elixir.session.commit()
 
 def record(args):
     if args.all and len(args.topic):
