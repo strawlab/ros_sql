@@ -2,6 +2,7 @@
 import sys
 import re
 from collections import OrderedDict
+import importlib
 
 from type_map import type_map
 
@@ -12,6 +13,14 @@ import rospy
 
 INHERITANCE_TYPE = 'multi'
 RELATIONSHIPS = "ondelete='cascade'"
+
+def get_msg_class(msg_name):
+    p1,p2 = msg_name.split('/')
+    module_name = p1+'.msg'
+    class_name = p2
+    module = importlib.import_module(module_name)
+    klass = getattr(module,class_name)
+    return klass
 
 def capitalize(name):
     "name_with_parts -> NameWithParts"

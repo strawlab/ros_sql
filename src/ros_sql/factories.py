@@ -1,11 +1,13 @@
 import elixir
 import time
-import importlib
 import schema
 
 from type_map import type_map
 
-import roslib; roslib.load_manifest('rospy'); import rospy
+import roslib
+roslib.load_manifest('ros_sql')
+import rospy
+import ros_sql.ros2sql as ros2sql
 
 def msg2sql(topic_name, msg,timestamp=None,session=None):
     '''generate commands for saving topic /test_pose'''
@@ -79,7 +81,7 @@ def sql2msg(topic_name,result):
             d[name] = value
 
     msg_class_name = schema.get_msg_name(topic_name)
-    MsgClass = get_msg_class(msg_class_name)
+    MsgClass = ros2sql.get_msg_class(msg_class_name)
 
     if len(inverses):
         # XXX TODO: how to add ManyToOne things that target this row? This
@@ -140,11 +142,3 @@ def msg2dict(topic_name,msg):
             row = insert_row( topic_name, name, value )
             atts.append( (name, row) )
     return result, atts
-
-def get_msg_class(msg_name):
-    p1,p2 = msg_name.split('/')
-    module_name = p1+'.msg'
-    class_name = p2
-    module = importlib.import_module(module_name)
-    klass = getattr(module,class_name)
-    return klass
