@@ -7,9 +7,10 @@ import importlib
 from type_map import type_map
 
 import roslib
-roslib.load_manifest('rosmsg')
+roslib.load_manifest('ros_sql')
 import rosmsg
 import rospy
+import std_msgs
 
 INHERITANCE_TYPE = 'multi'
 RELATIONSHIPS = "ondelete='cascade'"
@@ -66,10 +67,11 @@ def parse_field( topic_name, _type, source_topic_name, field_name ):
         element_type = _type[:-2]
         dt = type_map.get(element_type,None)
         if dt is not None:
+            msg_class = getattr(std_msgs.msg,element_type.capitalize())
             # array of fundamental type
             rx = generate_schema_text(
-                topic_name, dt, top=False,
-                known_sql_type=True,
+                topic_name, msg_class, top=False,
+                known_sql_type=dt,
                 relationships=[(my_instance_name,
                                 'ManyToOne(%r,inverse=%r,%s)'%(
                 my_class_name,other_instance_name,RELATIONSHIPS))] )
@@ -117,7 +119,7 @@ def dict_to_kwarg_string(kwargs):
     return ','.join(result)
 
 def generate_schema_text( topic_name, msg_class, relationships=None, top=True,
-                          known_sql_type=False):
+                          known_sql_type=None):
     """convert a message type into a Python source code string"""
     class_name = namify( topic_name, mode='class')
     table_name = namify( topic_name, mode='table')
@@ -144,8 +146,8 @@ def generate_schema_text( topic_name, msg_class, relationships=None, top=True,
         for name, val in relationships:
             buf += '    %s = %s\n'%(name,val)
     buf += '\n'
-    if known_sql_type:
-        buf += '    %s = Field(%s)\n'%(namify(topic_name,mode='field')+'_data',msg_class)
+    if known_sql_type is not None:
+        buf += '    %s = Field(%s)\n'%(namify(topic_name,mode='field')+'_data',known_sql_type)
     else:
         for name, _type in zip(msg_class.__slots__, msg_class._slot_types):
             if _type=='time':
