@@ -147,10 +147,7 @@ def insert_row( metadata, topic_name, name, value ):
         trans.rollback()
         raise
 
-    #row = klass(**kwargs)
-    #return row
     pk = result.inserted_primary_key
-    print 'inserted pk: %r'%pk
     assert len(pk)==1
     pk0 = pk[0]
     return pk0
