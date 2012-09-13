@@ -1,8 +1,7 @@
-import elixir
+"""given a pre-existing database schema, convert ROS messages back and forth"""
 import time
-import schema
-
 from type_map import type_map
+import sqlalchemy
 
 import roslib
 import roslib.message
@@ -10,47 +9,74 @@ roslib.load_manifest('ros_sql')
 import rospy
 import ros_sql.ros2sql as ros2sql
 
-def msg2sql(topic_name, msg, timestamp=None, session=None):
+ROS_SQL_COLNAME_PREFIX = ros2sql.ROS_SQL_COLNAME_PREFIX
+
+def get_sql_table( metadata, topic_name ):
+    table_name = ros2sql.namify( topic_name, mode='table')
+    return metadata.tables[table_name]
+
+def msg2sql(metadata, topic_name, msg, timestamp=None):
     '''generate commands for saving topic'''
     if timestamp is None:
         timestamp=rospy.Time.from_sec( time.time() )
     kwargs, atts = msg2dict(topic_name,msg)
-    kwargs['record_stamp_secs']=timestamp.secs
-    kwargs['record_stamp_nsecs']=timestamp.nsecs
+    kwargs[ROS_SQL_COLNAME_PREFIX+'_timestamp_secs']=timestamp.secs
+    kwargs[ROS_SQL_COLNAME_PREFIX+'_timestamp_nsecs']=timestamp.nsecs
     for name,value in atts:
         kwargs[name]=value
-    klass = schema.get_class(topic_name)
-    row = klass(**kwargs)
-    if session is not None:
-        session.add(row)
-        session.commit()
 
-def sql2msg(topic_name,result):
+    this_table = get_sql_table( metadata, topic_name )
+    ins = this_table.insert()
+
+    engine = metadata.bind
+    conn = engine.connect()
+    trans = conn.begin()
+    try:
+        result = conn.execute(ins,[kwargs])
+        trans.commit()
+    except:
+        trans.rollback()
+        raise
+
+def sql2msg(topic_name,result,metadata):
     '''convert query result into message'''
+
+    Session = sqlalchemy.orm.sessionmaker(bind=metadata.bind)
+    session = Session()
+    mymeta=session.query(ros2sql.ROS2SQL).filter_by(topic_name=topic_name).one()
+    print 'mymeta: %r'%mymeta.msg_class_name
+    #msg_class_name = schema.get_msg_name(topic_name)
+    MsgClass = ros2sql.get_msg_class(mymeta.msg_class_name)
+
     inverses = []
     forwards = {}
-    for relationship in result._descriptor.relationships:
-        if isinstance( relationship, elixir.relationships.OneToMany ):
-            inverses.append( relationship )
-        elif isinstance( relationship, elixir.relationships.ManyToOne ):
-            cnames = relationship.foreign_key
-            assert len(cnames)==1
-            cname = cnames[0]
-            forwards[cname.name] = relationship
-        elif isinstance( relationship, elixir.relationships.OneToOne ):
-            pass
-        else:
-            raise NotImplementedError
-    d=result.to_dict()
-    top_level=isinstance(result, schema.RecordedEntity)
+    # for relationship in result._descriptor.relationships:
+    #     if isinstance( relationship, elixir.relationships.OneToMany ):
+    #         inverses.append( relationship )
+    #     elif isinstance( relationship, elixir.relationships.ManyToOne ):
+    #         cnames = relationship.foreign_key
+    #         assert len(cnames)==1
+    #         cname = cnames[0]
+    #         forwards[cname.name] = relationship
+    #     elif isinstance( relationship, elixir.relationships.OneToOne ):
+    #         pass
+    #     else:
+    #         raise NotImplementedError
+    print '='*100
+    print 'result: %r'%type(result)
+    print 'result: %r'%result
+    print
+    #d=result.to_dict()
+    d = dict(result)
 
     results = {}
-    if top_level:
-        results['timestamp']=rospy.Time( d.pop('record_stamp_secs'), d.pop('record_stamp_nsecs') )
-        # this is a hack to use elixir defaults. XXX TODO: use elixir metadata
-        d.pop('recordedentity_id')
-        d.pop('row_type')
-    d.pop('id') # hack to use elixir default. XXX TODO: get primary key programatically
+    if mymeta.is_top:
+        # It is a top-level table.
+        top_secs = d.pop(ROS_SQL_COLNAME_PREFIX+'_timestamp_secs')
+        top_nsecs = d.pop(ROS_SQL_COLNAME_PREFIX+'_timestamp_nsecs')
+        results['timestamp'] = rospy.Time( top_secs, top_nsecs )
+
+    d.pop(ROS_SQL_COLNAME_PREFIX+'_id')
 
     for key in d.keys():
         if key in forwards:
@@ -62,27 +88,8 @@ def sql2msg(topic_name,result):
             if schema.have_topic(new_topic):
                 # This is a semi-hack to restrict us from going back
                 # into relationships we already went forward on.
-                new_msg = sql2msg(new_topic, field )['msg']
+                new_msg = sql2msg(new_topic, field, metadata )['msg']
                 d[field_name] = new_msg
-
-    for key in d.keys():
-        # XXX TODO use out-of-band channel to store time fields rather than name munging.
-        if key.endswith('_secs'):
-            # hack to detect encoded time: 2 fields with same name execpt ending
-            name = key[:-5]
-
-            name_sec = name + '_secs'
-            name_nsec = name + '_nsecs'
-            if not name_nsec in d:
-                continue
-            time_sec = d.pop(name_sec)
-            time_nsec = d.pop(name_nsec)
-            value = rospy.Time(time_sec,time_nsec)
-            assert name not in d
-            d[name] = value
-
-    msg_class_name = schema.get_msg_name(topic_name)
-    MsgClass = ros2sql.get_msg_class(msg_class_name)
 
     if len(inverses):
         for inv in inverses:
@@ -92,12 +99,12 @@ def sql2msg(topic_name,result):
 
             tmp1 = getattr( result, name )
             for tmp2 in tmp1:
-                value2 = sql2msg(tn2,tmp2)['msg']
+                value2 = sql2msg(tn2,tmp2,metadata)['msg']
                 arr.append( value2 )
 
             assert name not in d
             d[name] = arr
-
+    print 'd: %r'%d
     msg = MsgClass(**d)
     results['msg'] = msg
     return results
