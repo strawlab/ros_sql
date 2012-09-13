@@ -47,6 +47,7 @@ def get_table_info(topic_name,metadata):
     MsgClass = ros2sql.get_msg_class(mymeta.msg_class_name)
     return {'class':MsgClass,
             'top':mymeta.is_top,
+            'table_name':mymeta.table_name,
             }
 
 def sql2msg(topic_name,result,metadata):
@@ -117,20 +118,42 @@ def sql2msg(topic_name,result,metadata):
 
 def insert_row( metadata, topic_name, name, value ):
     name2 = topic_name + '.' + name
-    klass = get_table_info( name2, metadata )['class']
+    info = get_table_info( name2, metadata )
+
+    #klass = info['class']
+    table_name = info['table_name']
+    this_table = metadata.tables[table_name]
 
     if isinstance(value, roslib.message.Message ):
         kwargs, atts = msg2dict( metadata, name2, value )
         kw2 = {}
-        for k,v in atts:
+        for k,row in atts:
             assert k not in kwargs # not already there
             assert k not in kw2 # not overwriting
-            kw2[k]=v
+            kw2[k]=row
         kwargs.update(kw2)
     else:
         kwargs = {'data':value}
-    row = klass(**kwargs)
-    return row
+
+    ins = this_table.insert()
+
+    engine = metadata.bind
+    conn = engine.connect()
+    trans = conn.begin()
+    try:
+        result = conn.execute(ins,[kwargs])
+        trans.commit()
+    except:
+        trans.rollback()
+        raise
+
+    #row = klass(**kwargs)
+    #return row
+    pk = result.inserted_primary_key
+    print 'inserted pk: %r'%pk
+    assert len(pk)==1
+    pk0 = pk[0]
+    return pk0
 
 def msg2dict(metadata,topic_name,msg):
     result = {}

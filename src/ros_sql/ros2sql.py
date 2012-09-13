@@ -27,21 +27,24 @@ class ROS2SQL(Base):
     __tablename__ = ROS_SQL_COLNAME_PREFIX + '_metadata'
     id =  sqlalchemy.Column(sqlalchemy.types.Integer, primary_key=True)
     topic_name = sqlalchemy.Column( sqlalchemy.types.String )
+    table_name = sqlalchemy.Column( sqlalchemy.types.String )
     msg_class_name = sqlalchemy.Column( sqlalchemy.types.String )
     msg_md5sum = sqlalchemy.Column( sqlalchemy.types.String )
     is_top = sqlalchemy.Column( sqlalchemy.types.Boolean )
 
-    def __init__(self, topic_name, msg_class, msg_md5,is_top):
+    def __init__(self, topic_name, table_name, msg_class, msg_md5,is_top):
         self.topic_name = topic_name
+        self.table_name = table_name
         self.msg_class_name = msg_class
         self.msg_md5sum = msg_md5
         self.is_top = is_top
 
     def __repr__(self):
-        return "<ROS2SQL(%r,%r,%r)>"%( self.topic_name,
-                                       self.msg_class_name,
-                                       self.msg_md5sum,
-                                       self.is_top)
+        return "<ROS2SQL(%r,%r,%r,%r)>"%( self.topic_name,
+                                          self.table_name,
+                                          self.msg_class_name,
+                                          self.msg_md5sum,
+                                          self.is_top)
 
 def get_msg_class(msg_name):
     p1,p2 = msg_name.split('/')
@@ -254,7 +257,8 @@ def generate_schema_raw( metadata,
     #more_texts.insert(0, buf)
     #final = '\n'.join(more_texts)
 
-    tracking_table_rows.append(  (topic_name, msg_class._type, msg_class._md5sum, top) )
+    # args to ROS2SQL()
+    tracking_table_rows.append(  (topic_name, table_name, msg_class._type, msg_class._md5sum, top) )
 
     return {#'topics2tables':topics2tables,
             #'topics2classes':topics2classes,
@@ -316,21 +320,11 @@ def gen_schema( metadata, topic_name, msg_class, top=True):
     session = Session()
 
     for new_meta_row_args in rx['tracking_table_rows']:
-        #new_meta_row = ROS2SQL(topic_name,msg_class._type,msg_class._md5sum,True)
         new_meta_row = ROS2SQL(*new_meta_row_args)
         session.add(new_meta_row)
     session.commit()
-    return rx
+    #return rx
 
 def add_schemas( metadata, list_of_topics_and_messages ):
-    #Base.metadata.reflect( metadata.bind )
-    #Base.metadata.create_all( metadata.bind )
-
-    #Session = sqlalchemy.orm.sessionmaker(bind=metadata.bind)
-    #session = Session()
     for topic_name, msg_class in list_of_topics_and_messages:
         gen_schema( metadata, topic_name, msg_class )
-        #rx = generate_schema_raw(metadata,topic_name,msg_class)
-        #new_meta_row = ROS2SQL(topic_name,msg_class._type,msg_class._md5sum,True)
-        #session.add(new_meta_row)
-    #session.commit()
