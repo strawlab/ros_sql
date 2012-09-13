@@ -89,7 +89,6 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name ):
         # simple type
         results = {'assign':dt}
         return results
-    1245603/0
 
     my_class_name = namify( source_topic_name, mode='class')
     my_instance_name = namify( source_topic_name, mode='instance')
@@ -101,6 +100,7 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name ):
         element_type = _type[:-2]
         dt = type_map.get(element_type,None)
         if dt is not None:
+            78945/0
             element_class_name = slot_type_to_class_name(element_type)
             msg_class = getattr(std_msgs.msg,element_class_name)
             # array of fundamental type
@@ -112,6 +112,7 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name ):
                 my_class_name,other_instance_name,RELATIONSHIPS))] )
 
         else:
+            15043854/0
             # array of non-fundamental type
             msg_class = roslib.message.get_message_class(element_type)
 
@@ -120,6 +121,7 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name ):
                 relationships=[(my_instance_name,
                                 'ManyToOne(%r,inverse=%r,%s)'%(
                 my_class_name,other_instance_name,RELATIONSHIPS))] )
+        87492/0
         results = {'assign':'OneToMany(%r,inverse=%r)'%(
             other_class_name,my_instance_name),
                    'text':rx['schema_text'],
@@ -134,9 +136,9 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name ):
 
         rx = generate_schema_raw( metadata,
             topic_name, msg_class, top=False,
-            relationships=[(my_instance_name,
-                            'OneToOne(%r,inverse=%r)'%(
-            my_class_name,other_instance_name))] )
+            relationships=[(my_instance_name,('OneToOne',my_class_name, other_instance_name))]
+            #                 'OneToOne(%r,inverse=%r)'%(
+            # my_class_name,other_instance_name))] )
         results = {'assign':'ManyToOne(%r,inverse=%r,%s)'%(
             other_class_name,my_instance_name,RELATIONSHIPS),
                    'text':rx['schema_text'],
@@ -189,9 +191,9 @@ def generate_schema_raw( metadata,
     # '''schema for topic %s of type %s'''%(topic_name,msg_class._type)
 
     if relationships is not None:
-        1/0
-        for name, val in relationships:
-            buf += '    %s = %s\n'%(name,val)
+        raise 1
+        #for name, val in relationships:
+        #    buf += '    %s = %s\n'%(name,val)
 
     if known_sql_type is not None:
         this_table.append_column(sqlalchemy.Column('data', known_sql_type))
