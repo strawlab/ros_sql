@@ -19,7 +19,7 @@ def msg2sql(metadata, topic_name, msg, timestamp=None):
     '''generate commands for saving topic'''
     if timestamp is None:
         timestamp=rospy.Time.from_sec( time.time() )
-    kwargs, atts = msg2dict(topic_name,msg)
+    kwargs, atts = msg2dict(metadata,topic_name,msg)
     kwargs[ROS_SQL_COLNAME_PREFIX+'_timestamp_secs']=timestamp.secs
     kwargs[ROS_SQL_COLNAME_PREFIX+'_timestamp_nsecs']=timestamp.nsecs
     for name,value in atts:
@@ -38,15 +38,21 @@ def msg2sql(metadata, topic_name, msg, timestamp=None):
         trans.rollback()
         raise
 
-def sql2msg(topic_name,result,metadata):
-    '''convert query result into message'''
-
+def get_table_info(topic_name,metadata):
     Session = sqlalchemy.orm.sessionmaker(bind=metadata.bind)
     session = Session()
     mymeta=session.query(ros2sql.ROS2SQL).filter_by(topic_name=topic_name).one()
     print 'mymeta: %r'%mymeta.msg_class_name
     #msg_class_name = schema.get_msg_name(topic_name)
     MsgClass = ros2sql.get_msg_class(mymeta.msg_class_name)
+    return {'class':MsgClass,
+            'top':mymeta.is_top,
+            }
+
+def sql2msg(topic_name,result,metadata):
+    '''convert query result into message'''
+    info = get_table_info( topic_name, metadata )
+    MsgClass = info['class']
 
     inverses = []
     forwards = {}
@@ -70,7 +76,7 @@ def sql2msg(topic_name,result,metadata):
     d = dict(result)
 
     results = {}
-    if mymeta.is_top:
+    if info['top']:
         # It is a top-level table.
         top_secs = d.pop(ROS_SQL_COLNAME_PREFIX+'_timestamp_secs')
         top_nsecs = d.pop(ROS_SQL_COLNAME_PREFIX+'_timestamp_nsecs')
@@ -109,11 +115,12 @@ def sql2msg(topic_name,result,metadata):
     results['msg'] = msg
     return results
 
-def insert_row( topic_name, name, value ):
+def insert_row( metadata, topic_name, name, value ):
     name2 = topic_name + '.' + name
-    klass = schema.get_class(name2)
+    klass = get_table_info( name2, metadata )['class']
+
     if isinstance(value, roslib.message.Message ):
-        kwargs, atts = msg2dict( name2, value )
+        kwargs, atts = msg2dict( metadata, name2, value )
         kw2 = {}
         for k,v in atts:
             assert k not in kwargs # not already there
@@ -125,7 +132,7 @@ def insert_row( topic_name, name, value ):
     row = klass(**kwargs)
     return row
 
-def msg2dict(topic_name,msg):
+def msg2dict(metadata,topic_name,msg):
     result = {}
     atts = []
     for name,_type in zip(msg.__slots__, msg._slot_types):
@@ -141,12 +148,12 @@ def msg2dict(topic_name,msg):
             # special case for array type
             refs = []
             for element in value:
-                row = insert_row( topic_name, name, element )
+                row = insert_row( metadata, topic_name, name, element )
                 refs.append(row)
             result[name] = refs
         else:
             # compound type
             #result[name] = msg2dict( value )
-            row = insert_row( topic_name, name, value )
+            row = insert_row( metadata, topic_name, name, value )
             atts.append( (name, row) )
     return result, atts
