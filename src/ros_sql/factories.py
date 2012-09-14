@@ -41,22 +41,52 @@ def msg2sql(metadata, topic_name, msg, timestamp=None):
 def get_table_info(topic_name,metadata):
     Session = sqlalchemy.orm.sessionmaker(bind=metadata.bind)
     session = Session()
-    mymeta=session.query(ros2sql.ROS2SQL).filter_by(topic_name=topic_name).one()
-    print 'mymeta: %r'%mymeta.msg_class_name
-    #msg_class_name = schema.get_msg_name(topic_name)
+    mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(topic_name=topic_name).one()
+    myts=session.query(ros2sql.RosSqlMetadataTimestamps).filter_by( main_id=mymeta.id ).all()
+    # mymeta=session.query(ros2sql.RosSqlMetadata,ros2sql.RosSqlMetadataTimestamps).\
+    #         filter(ros2sql.RosSqlMetadata.topic_name==topic_name).one()
+    #         #filter(ros2sql.RosSqlMetadata.id==ros2sql.RosSqlMetadataTimestamps.main_id).\
     MsgClass = ros2sql.get_msg_class(mymeta.msg_class_name)
+    timestamp_columns = []
+    print '.-='*100
+    print 'mymeta: %r'%mymeta
+    print '.-='*100
+    for tsrow in myts:
+        timestamp_columns.append(tsrow.column_base_name)
     return {'class':MsgClass,
             'top':mymeta.is_top,
             'table_name':mymeta.table_name,
+            'timestamp_columns':timestamp_columns,
             }
 
 def sql2msg(topic_name,result,metadata):
     '''convert query result into message'''
     info = get_table_info( topic_name, metadata )
     MsgClass = info['class']
+    table_name = info['table_name']
+    this_table = metadata.tables[table_name]
 
+    print
+    print '::::::::::::::::::::::::::: this_table: %r'%this_table
+    #print
+    #print dir(this_table)
+    #print
+    print 'this_table.primary_key',this_table.primary_key
+    for c in this_table.columns:
+        print c
+        print c.name
+        print c.foreign_keys
+        print c.type
+        print
+    print
     inverses = []
     forwards = {}
+    for c in this_table.columns:
+        if len(c.foreign_keys):
+            forwards[c.name] = c.foreign_keys
+        # for fk in c.foreign_keys:
+        #     forwards[fk.name] = fk
+
     # for relationship in result._descriptor.relationships:
     #     if isinstance( relationship, elixir.relationships.OneToMany ):
     #         inverses.append( relationship )
@@ -83,20 +113,47 @@ def sql2msg(topic_name,result,metadata):
         top_nsecs = d.pop(ROS_SQL_COLNAME_PREFIX+'_timestamp_nsecs')
         results['timestamp'] = rospy.Time( top_secs, top_nsecs )
 
-    d.pop(ROS_SQL_COLNAME_PREFIX+'_id')
+    for col in this_table.primary_key:
+        pk_name = col.name
+        if pk_name.startswith(ROS_SQL_COLNAME_PREFIX):
+            d.pop(pk_name)
 
     for key in d.keys():
-        if key in forwards:
-            relationship = forwards[key]
-            field_name = relationship.name
+        for fk in forwards.get(key,[]):
+            field_name = key
+            #field_name = fk.target_fullname
+            #field = getattr(result,field_name)
             field = getattr(result,field_name)
             new_topic = topic_name + '.' + field_name
-            d.pop(key)
-            if schema.have_topic(new_topic):
-                # This is a semi-hack to restrict us from going back
-                # into relationships we already went forward on.
-                new_msg = sql2msg(new_topic, field, metadata )['msg']
+            new_table_name = ros2sql.namify( new_topic, mode='table')
+
+            pk_name = ROS_SQL_COLNAME_PREFIX+new_table_name+'_id'
+
+            fk = d.pop(field_name)
+            # --------------------
+
+            # get back from SQL
+            new_table = get_sql_table( metadata, new_topic )
+            new_info = get_table_info(new_topic, metadata)
+            new_primary_key_column = getattr(new_table.c,pk_name)
+            s = sqlalchemy.sql.select([new_table], new_primary_key_column==fk )
+
+            conn = metadata.bind.connect()
+            sa_result = conn.execute(s)
+            msg_actual_sql = sa_result.fetchone()
+            print 'msg_actual_sql',msg_actual_sql
+            print '*'*1000
+            sa_result.close()
+            if 1:
+                new_msg = sql2msg(new_topic, msg_actual_sql, metadata )['msg']
                 d[field_name] = new_msg
+
+
+            # if schema.have_topic(new_topic):
+            #     # This is a semi-hack to restrict us from going back
+            #     # into relationships we already went forward on.
+            #     new_msg = sql2msg(new_topic, field, metadata )['msg']
+            #     d[field_name] = new_msg
 
     if len(inverses):
         for inv in inverses:
@@ -112,6 +169,13 @@ def sql2msg(topic_name,result,metadata):
             assert name not in d
             d[name] = arr
     print 'd: %r'%d
+
+    for field in info['timestamp_columns']:
+        my_secs =  d.pop(field+'_secs')
+        my_nsecs = d.pop(field+'_nsecs')
+        my_val = rospy.Time( my_secs, my_nsecs )
+        d[field] = my_val
+
     msg = MsgClass(**d)
     results['msg'] = msg
     return results
@@ -120,7 +184,6 @@ def insert_row( metadata, topic_name, name, value ):
     name2 = topic_name + '.' + name
     info = get_table_info( name2, metadata )
 
-    #klass = info['class']
     table_name = info['table_name']
     this_table = metadata.tables[table_name]
 

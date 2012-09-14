@@ -16,14 +16,36 @@ import rosmsg
 import rospy
 import std_msgs
 
-RELATIONSHIPS = "ondelete='cascade'"
 ROS_SQL_COLNAME_PREFIX = '_ros_sql'
 
 Base = sqlalchemy.ext.declarative.declarative_base()
 #Base = sqlalchemy.ext.declarative.declarative_base(
 #    cls=sqlalchemy.ext.declarative.DeclarativeReflectedBase)
 
-class ROS2SQL(Base):
+class RosSqlMetadataArrays(Base):
+    __tablename__ = ROS_SQL_COLNAME_PREFIX + '_arrays'
+    id =  sqlalchemy.Column(sqlalchemy.types.Integer, primary_key=True)
+    field_name = sqlalchemy.Column( sqlalchemy.types.String )
+    table_name = sqlalchemy.Column( sqlalchemy.types.String )
+    def __init__(self, field_name, table_name):
+        self.field_name = field_name
+        self.table_name = table_name
+
+class RosSqlMetadataTimestamps(Base):
+    """keep track of names of Time fields"""
+    __tablename__ = ROS_SQL_COLNAME_PREFIX + '_timestamp_metadata'
+    id =  sqlalchemy.Column(sqlalchemy.types.Integer, primary_key=True)
+    column_base_name = sqlalchemy.Column( sqlalchemy.types.String )
+
+    main_id = sqlalchemy.Column( sqlalchemy.types.Integer,
+                                 sqlalchemy.ForeignKey(ROS_SQL_COLNAME_PREFIX + '_metadata.id' ))
+
+    def __init__(self, column_base_name):
+        self.column_base_name = column_base_name
+    def __repr__(self):
+        return '<RosSqlMetadataTimestamps(%r)>'%(self.column_base_name)
+
+class RosSqlMetadata(Base):
     __tablename__ = ROS_SQL_COLNAME_PREFIX + '_metadata'
     id =  sqlalchemy.Column(sqlalchemy.types.Integer, primary_key=True)
     topic_name = sqlalchemy.Column( sqlalchemy.types.String )
@@ -31,6 +53,10 @@ class ROS2SQL(Base):
     msg_class_name = sqlalchemy.Column( sqlalchemy.types.String )
     msg_md5sum = sqlalchemy.Column( sqlalchemy.types.String )
     is_top = sqlalchemy.Column( sqlalchemy.types.Boolean )
+
+    timestamps = sqlalchemy.orm.relationship("RosSqlMetadataTimestamps",
+                                             order_by="RosSqlMetadataTimestamps.id",
+                                             backref=sqlalchemy.orm.backref(ROS_SQL_COLNAME_PREFIX + '_metadata'))
 
     def __init__(self, topic_name, table_name, msg_class, msg_md5,is_top):
         self.topic_name = topic_name
@@ -40,11 +66,11 @@ class ROS2SQL(Base):
         self.is_top = is_top
 
     def __repr__(self):
-        return "<ROS2SQL(%r,%r,%r,%r)>"%( self.topic_name,
-                                          self.table_name,
-                                          self.msg_class_name,
-                                          self.msg_md5sum,
-                                          self.is_top)
+        return "<RosSqlMetadata(%r,%r,%r,%r,%r)>"%( self.topic_name,
+                                                    self.table_name,
+                                                    self.msg_class_name,
+                                                    self.msg_md5sum,
+                                                    self.is_top)
 
 def get_msg_class(msg_name):
     p1,p2 = msg_name.split('/')
@@ -85,7 +111,7 @@ def slot_type_to_class_name(element_type):
         x = 'UInt' + x[4:]
     return x
 
-def parse_field( metadata, topic_name, _type, source_topic_name, field_name ):
+def parse_field( metadata, topic_name, _type, source_topic_name, field_name, parent_pk_name, parent_pk_type, parent_table_name ):
     """for a given element within a message, find the schema field type"""
     dt = type_map.get(_type,None)
     tab_track_rows = []
@@ -102,13 +128,14 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name ):
     my_class_name = namify( source_topic_name, mode='class')
     my_instance_name = namify( source_topic_name, mode='instance')
     other_class_name = namify( topic_name, mode='class')
-    other_instance_name = field_name
+    other_instance_name = namify( topic_name, mode='instance')
     print 'parsing non-trivial field in topic %r, field name %r'%(topic_name, field_name)
 
     if _type.endswith('[]'):
         # array - need to start another sql table
         element_type = _type[:-2]
         dt = type_map.get(element_type,None)
+
         if dt is not None:
             78945/0
             element_class_name = slot_type_to_class_name(element_type)
@@ -119,59 +146,39 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name ):
                 known_sql_type=dt,
                 relationships=[(my_instance_name,
                                 'ManyToOne(%r,inverse=%r,%s)'%(
-                my_class_name,other_instance_name,RELATIONSHIPS))] )
+                my_class_name,field_name,RELATIONSHIPS))] )
 
         else:
-            15043854/0
             # array of non-fundamental type
             msg_class = roslib.message.get_message_class(element_type)
 
             rx = generate_schema_raw(metadata,
-                topic_name, msg_class, top=False,
-                relationships=[(my_instance_name,
-                                'ManyToOne(%r,inverse=%r,%s)'%(
-                my_class_name,other_instance_name,RELATIONSHIPS))] )
-        87492/0
-        results = {'assign':'OneToMany(%r,inverse=%r)'%(
-            other_class_name,my_instance_name),
-                   'text':rx['schema_text'],
-                   'classes':rx['class_names'],
-                   'tables':rx['table_names'],
-                   'topics2class_names':rx['topics2class_names'],
-                   'topics2msg':rx['topics2msg'],
-                   }
-    else:
-        # _type is another message type
-        msg_class = roslib.message.get_message_class(_type)
+                                     topic_name, msg_class, top=False,
+                                     many_to_one=(parent_table_name,parent_pk_name,parent_pk_type),
+                                     )
 
-        rx = generate_schema_raw(metadata,topic_name,msg_class, top=False)
         tab_track_rows.extend( rx['tracking_table_rows'] )
-
-        for k in rx:
-            v = rx[k]
-            print 'rx[%r]: %r'%(k,v)
-
-            #relationships=[(my_instance_name,('OneToOne',my_class_name, other_instance_name))])
-            #                 'OneToOne(%r,inverse=%r)'%(
-            # my_class_name,other_instance_name))] )
-
-        other_key_name = my_instance_name + '.' + rx['pk_name']
-
-        print '::::::::::::::::::::::::::::::; other_key_name: %r'%other_key_name
-        print '%r'%my_instance_name
-
-        results = {#'assign':'ManyToOne(%r,inverse=%r,%s)'%(
-            #other_class_name,my_instance_name,RELATIONSHIPS),
+        other_key_name = other_instance_name + '.' + rx['pk_name']
+        results = {
             'col_args': ( sqlalchemy.ForeignKey(other_key_name,ondelete='cascade'), ),
             'col_kwargs': {'type_':rx['pk_type'],
                            'nullable':False,
                            },
             'tab_track_rows':tab_track_rows,
-                   # 'text':rx['schema_text'],
-                   # 'classes':rx['class_names'],
-                   # 'tables':rx['table_names'],
-                   # 'topics2class_names':rx['topics2class_names'],
-                   # 'topics2msg':rx['topics2msg'],
+                   }
+    else:
+        # _type is another message type
+        msg_class = roslib.message.get_message_class(_type)
+        rx = generate_schema_raw(metadata,topic_name,msg_class, top=False)
+        tab_track_rows.extend( rx['tracking_table_rows'] )
+        other_key_name = other_instance_name + '.' + rx['pk_name']
+
+        results = {
+            'col_args': ( sqlalchemy.ForeignKey(other_key_name,ondelete='cascade'), ),
+            'col_kwargs': {'type_':rx['pk_type'],
+                           'nullable':False,
+                           },
+            'tab_track_rows':tab_track_rows,
                    }
     return results
 
@@ -188,10 +195,13 @@ def add_time_cols(this_table, prefix):
         prefix+'_nsecs', type_map['uint64'] ))
 
 def generate_schema_raw( metadata,
-                         topic_name, msg_class, relationships=None, top=True,
+                         topic_name, msg_class, top=True,
+                         many_to_one=None,
                          known_sql_type=None):
     """convert a message type into a Python source code string"""
     tracking_table_rows = []
+    timestamp_columns = []
+
     #class_name = namify( topic_name, mode='class')
     table_name = namify( topic_name, mode='table')
 
@@ -204,7 +214,7 @@ def generate_schema_raw( metadata,
     print '                                               Table(%r)'%table_name
     this_table = sqlalchemy.Table( table_name, metadata )
 
-    pk_name = ROS_SQL_COLNAME_PREFIX+'_id'
+    pk_name = ROS_SQL_COLNAME_PREFIX+table_name+'_id'
 
     assert pk_name not in msg_class.__slots__
     assert (ROS_SQL_COLNAME_PREFIX+'_timestamp_secs') not in msg_class.__slots__
@@ -213,21 +223,26 @@ def generate_schema_raw( metadata,
     pk_type = sqlalchemy.types.Integer
 
     this_table.append_column(
-        sqlalchemy.Column(ROS_SQL_COLNAME_PREFIX+'_id',
+        sqlalchemy.Column(pk_name,
                           pk_type,
                           primary_key=True))
+
+    if many_to_one is not None:
+        parent_table_name, parent_pk_name, parent_pk_type = many_to_one
+        # add column referring back to original table
+        this_table.append_column(
+            sqlalchemy.Column( 'parent_id',
+                               #sqlalchemy.ForeignKey(parent_pk_name,ondelete='cascade'),
+                               sqlalchemy.ForeignKey(parent_table_name+'.'+parent_pk_name,ondelete='cascade'),
+                               type_ = parent_pk_type,
+                               nullable = False,
+                               )
+            )
 
     if top:
         add_time_cols( this_table, ROS_SQL_COLNAME_PREFIX+'_timestamp' )
 
     # '''schema for topic %s of type %s'''%(topic_name,msg_class._type)
-
-    if relationships is not None:
-        for name, val in relationships:
-            rel_type, r1, r2 = val
-            print 'topic_name,rel_type,r1,r2',topic_name,rel_type,r1,r2
-            1/0
-            #buf += '    %s = %s\n'%(name,val)
 
     if known_sql_type is not None:
         this_table.append_column(sqlalchemy.Column('data', known_sql_type))
@@ -236,82 +251,30 @@ def generate_schema_raw( metadata,
             if _type=='time':
                 # special type - doesn't map to 2 columns
                 add_time_cols( this_table, name )
+                timestamp_columns.append( name )
             else:
-                results = parse_field( metadata, topic_name+'.'+name, _type, topic_name, name )
+                results = parse_field( metadata, topic_name+'.'+name, _type, topic_name, name, pk_name, pk_type, table_name )
                 tracking_table_rows.extend( results['tab_track_rows'] )
                 print '--------- parse field results: %r'%results
 
                 this_table.append_column( sqlalchemy.Column(name, *results['col_args'], **results['col_kwargs'] ))
 
-                # assert 'text' not in results
-                # if 'text' in results:
+    tracking_table_rows.append(  (topic_name, table_name, msg_class._type, msg_class._md5sum, top, timestamp_columns) )
 
-                #     # more_texts.append(results['text'])
-                #     # #classes.extend(results['classes'])
-                #     # #tables.extend( results['tables'] )
-                #     # #topics2class_names.update( results['topics2class_names'] )
-                #     # topics2msg.update( results['topics2msg'] )
+    print '_________________________________________________'
+    print 'vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv'
+    print '%r'%this_table
+    print '^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^'
+    print '_________________________________________________'
 
-    topics2tables = {topic_name : this_table}
-    #topics2classes = {topic_name : this_class}
-    #more_texts.insert(0, buf)
-    #final = '\n'.join(more_texts)
-
-    # args to ROS2SQL()
-    tracking_table_rows.append(  (topic_name, table_name, msg_class._type, msg_class._md5sum, top) )
-
-    return {#'topics2tables':topics2tables,
-            #'topics2classes':topics2classes,
-            #'topics2msg':topics2msg,
-
-            'tracking_table_rows':tracking_table_rows,
+    return {'tracking_table_rows':tracking_table_rows,
             'pk_type':pk_type,
             'pk_name':pk_name,
             }
 
-def _write_schemas( text, topics2class_names, topics2msg, all = None ):
-    19043239/0
-    result = """from elixir import *
-
-"""
-    if all is not None:
-        result += '__all__ = %r\n\n'%all
-
-    result += text
-
-    result += \
-"""
-#--------------- helper functions
-def get_class( topic_name ):
-    '''get the schema for topic_name'''
-    d = {
-"""
-    for key in topics2class_names:
-        result += '        %r:%s,\n'%(key,topics2class_names[key])
-    result += '    }\n'
-    result += '    return d[topic_name]\n'
-
-    result += """
-def get_msg_name( topic_name ):
-    '''get the msg name for topic_name'''
-    d = {
-"""
-    for key in topics2msg:
-        result += '        %r:%r,\n'%(key,topics2msg[key])
-    result += '    }\n'
-    result += '    return d[topic_name]\n'
-
-    result += """
-def have_topic( topic_name ):
-    d = %r
-"""%(topics2msg.keys(),)
-    result += '    return (topic_name in d)\n'
-
-    return result
-
-def gen_schema( metadata, topic_name, msg_class, top=True):
+def gen_schema( metadata, topic_name, msg_class):
     # add table(s) to MetaData instance
-    rx = generate_schema_raw(metadata,topic_name,msg_class, top=top)
+    rx = generate_schema_raw(metadata,topic_name,msg_class, top=True)
 
     # add table tracking row to MetaData instance
     Base.metadata.reflect( metadata.bind )
@@ -320,10 +283,17 @@ def gen_schema( metadata, topic_name, msg_class, top=True):
     session = Session()
 
     for new_meta_row_args in rx['tracking_table_rows']:
-        new_meta_row = ROS2SQL(*new_meta_row_args)
+        timestamp_rows = new_meta_row_args[-1]
+        args = new_meta_row_args[:-1]
+        newts_rows = []
+        for ts_row in timestamp_rows:
+            print 'adding ts_row %r'%ts_row
+            newts_row = RosSqlMetadataTimestamps(ts_row)
+            newts_rows.append(newts_row)
+        new_meta_row = RosSqlMetadata(*args)
+        new_meta_row.timestamps = newts_rows
         session.add(new_meta_row)
     session.commit()
-    #return rx
 
 def add_schemas( metadata, list_of_topics_and_messages ):
     for topic_name, msg_class in list_of_topics_and_messages:
