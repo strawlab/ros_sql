@@ -130,22 +130,6 @@ def sql2msg(topic_name,result,metadata):
     for c in this_table.columns:
         if len(c.foreign_keys):
             forwards[c.name] = c.foreign_keys
-        # for fk in c.foreign_keys:
-        #     forwards[fk.name] = fk
-
-    # for relationship in result._descriptor.relationships:
-    #     if isinstance( relationship, elixir.relationships.OneToMany ):
-    #         inverses.append( relationship )
-    #     elif isinstance( relationship, elixir.relationships.ManyToOne ):
-    #         cnames = relationship.foreign_key
-    #         assert len(cnames)==1
-    #         cname = cnames[0]
-    #         forwards[cname.name] = relationship
-    #     elif isinstance( relationship, elixir.relationships.OneToOne ):
-    #         pass
-    #     else:
-    #         raise NotImplementedError
-    #d=result.to_dict()
     d = dict(result)
 
     results = {}
@@ -166,8 +150,6 @@ def sql2msg(topic_name,result,metadata):
     for key in d.keys():
         for fk in forwards.get(key,[]):
             field_name = key
-            #field_name = fk.target_fullname
-            #field = getattr(result,field_name)
             field = getattr(result,field_name)
             new_topic = topic_name + '.' + field_name
             new_table_name = ros2sql.namify( new_topic, mode='table')
@@ -192,13 +174,6 @@ def sql2msg(topic_name,result,metadata):
             if 1:
                 new_msg = sql2msg(new_topic, msg_actual_sql, metadata )['msg']
                 d[field_name] = new_msg
-
-
-            # if schema.have_topic(new_topic):
-            #     # This is a semi-hack to restrict us from going back
-            #     # into relationships we already went forward on.
-            #     new_msg = sql2msg(new_topic, field, metadata )['msg']
-            #     d[field_name] = new_msg
 
     if len(inverses):
         for inv in inverses:
@@ -236,7 +211,6 @@ def get_backref_values( table_name, field, parent_pk, parent_table, metadata ):
     new_table = metadata.tables[new_info['table_name']]
     new_topic = new_info['topic_name']
     foreign_key_column = getattr(new_table.c,field)
-    #s = sqlalchemy.sql.select([new_table], foreign_key_column==parent_pk )
     s = sqlalchemy.sql.select([new_table])
 
     conn = metadata.bind.connect()
