@@ -286,7 +286,6 @@ def generate_schema_raw( metadata,
 def gen_schema( metadata, topic_name, msg_class):
     # add table(s) to MetaData instance
     rx = generate_schema_raw(metadata,topic_name,msg_class, top=True)
-    raw_tables = rx['raw_tables']
     metadata.create_all( metadata.bind )
 
     # add table tracking row to MetaData instance
