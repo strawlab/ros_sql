@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import sys
 import re
-from collections import OrderedDict
 import importlib
 
 import sqlalchemy
@@ -216,13 +215,7 @@ def generate_schema_raw( metadata,
     timestamp_columns = []
     backref_info_list = []
 
-    #class_name = namify( topic_name, mode='class')
     table_name = namify( topic_name, mode='table')
-
-    #classes = [class_name]
-    #tables = [table_name]
-    #topics2class_names = OrderedDict({topic_name: class_name})
-    topics2msg = OrderedDict({topic_name: msg_class._type})
     more_texts = []
 
     this_table = sqlalchemy.Table( table_name, metadata )
