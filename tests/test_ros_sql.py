@@ -1,10 +1,10 @@
-import elixir
 import sqlalchemy
 
 import roslib
 roslib.load_manifest('ros_sql')
 import ros_sql.msg
 import ros_sql.ros2sql as ros2sql
+import ros_sql.factories as factories
 
 import std_msgs.msg
 
@@ -14,22 +14,6 @@ import geometry_msgs.msg
 class Bunch:
     def __init__(self, **kwds):
         self.__dict__.update(kwds)
-
-def setup():
-    # import rospy
-    # rospy.init_node('test_ros_sql',anonymous=True)
-    reset_sqlalchemy()
-def reset_sqlalchemy():
-    if 0:
-        # reset all elixir state information
-        elixir.session = sqlalchemy.orm.scoped_session(sqlalchemy.orm.sessionmaker())
-        elixir.metadata = sqlalchemy.MetaData()
-        elixir.metadatas = set()
-        elixir.entities = elixir.GlobalEntityCollection()
-
-    # connect to in-memory db
-    elixir.metadata.bind = "sqlite:///:memory:"
-    #elixir.metadata.bind.echo = True
 
 def test_simple_message_roundtrip():
     pose1 = geometry_msgs.msg.Pose()
@@ -69,58 +53,48 @@ def test_simple_message_roundtrip():
     tc.uint8_array = map( std_msgs.msg.UInt8, [  0, 3, 254 ])
     tc.header = header
 
-    # These are all-but-one disabled because, for now, we save schema
-    # a module and import it. So we can test only one
-    # schema-generation run. Thus we choose a complex one.
+    bma = std_msgs.msg.ByteMultiArray()
+    bma.data = [ std_msgs.msg.Byte(x) for x in [77, 33, 254] ]
 
-    for tn,mc,md in [#('/test_string',std_msgs.msg.String, std_msgs.msg.String('xyz')),
-                     #('/test_int8', std_msgs.msg.Int8, std_msgs.msg.Int8(-4)),
-                     #('/test_uint8', std_msgs.msg.UInt8, std_msgs.msg.UInt8(254)),
-                     #('/test_pose', geometry_msgs.msg.Pose, pose1),
-                     #('/myheader', std_msgs.msg.Header, header),
-                     #('/test_pose_array', geometry_msgs.msg.PoseArray, pa1),
+    for tn,mc,md in [('/test_string',std_msgs.msg.String, std_msgs.msg.String('xyz')),
+                     ('/test_int8', std_msgs.msg.Int8, std_msgs.msg.Int8(-4)),
+                     ('/test_uint8', std_msgs.msg.UInt8, std_msgs.msg.UInt8(254)),
+                     ('/test_pose', geometry_msgs.msg.Pose, pose1),
+                     ('/myheader', std_msgs.msg.Header, header),
+                     ('/byte_arr_topic', std_msgs.msg.ByteMultiArray, bma),
+                     ('/test_pose_array', geometry_msgs.msg.PoseArray, pa1),
                      ('/test_complex', ros_sql.msg.TestComplex, tc),
                      ]:
         yield check_roundtrip, tn,mc,md
 
 def check_roundtrip( topic_name, msg_class, msg_expected ):
-    #reset_sqlalchemy()
-
-    schema_results = ros2sql.build_schemas([(topic_name,msg_class)])
-    if 1:
-        with open('schema.py',mode='w') as fd:
-            fd.write(schema_results['schema_text'])
-
-    USE_EXEC=False
-    if USE_EXEC:
-        schema_ns = {}
-        exec schema_results['schema_text'] in schema_ns
-        schema = Bunch(**schema_ns) # make it act like a module
-        del schema_ns
-    else:
-        import schema
-
-    elixir.setup_all()
-    elixir.create_all()
-
-    import ros_sql.factories as factories
+    engine = sqlalchemy.create_engine('sqlite:///:memory:')#, echo=True)
+    metadata = sqlalchemy.MetaData(bind=engine)
+    ros2sql.add_schemas(metadata,[(topic_name,msg_class)])
+    metadata.create_all()
 
     # send to SQL
-    factories.msg2sql(topic_name,msg_expected,session=elixir.session)
+    factories.msg2sql(metadata, topic_name, msg_expected)
 
     # get back from SQL
-    class_ = schema.get_class(topic_name)
-    msg_actual_sql = class_.query.one() # make actual query
-    result = factories.sql2msg( topic_name, msg_actual_sql ) # convert to ROS
+    this_table = factories.get_sql_table(metadata, topic_name)
+    s = sqlalchemy.sql.select([this_table])
+
+    conn = metadata.bind.connect()
+    sa_result = conn.execute(s)
+    msg_actual_sql = sa_result.fetchone()
+    sa_result.close()
+
+    result = factories.sql2msg( topic_name, msg_actual_sql, metadata ) # convert to ROS
 
     timestamp = result['timestamp']
     msg_actual = result['msg']
 
-    print 'FINAL *************'
-    print
-    print 'msg_expected'
-    print msg_expected
-    print
-    print 'msg_actual'
-    print msg_actual
+    # print 'FINAL *************'
+    # print
+    # print 'msg_expected'
+    # print msg_expected
+    # print
+    # print 'msg_actual'
+    # print msg_actual
     assert msg_actual == msg_expected

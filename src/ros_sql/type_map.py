@@ -1,26 +1,28 @@
+import sqlalchemy.types as s
+
 type_map = {
     'int8':
-        'SmallInteger()',
+        s.SmallInteger(),
     'uint8':
-        'SmallInteger(unsigned=True)',
+        s.SmallInteger(unsigned=True),
     'byte':
-        'SmallInteger(unsigned=True)',
+        s.SmallInteger(unsigned=True),
     'int16':
-        'Integer()',
+        s.Integer(),
     'uint16':
-        'Integer(unsigned=True)',
+        s.Integer(unsigned=True),
     'int32':
-        'Integer()',
+        s.Integer(),
     'uint32':
-        'Integer(unsigned=True)',
+        s.Integer(unsigned=True),
     'int64':
-        'BigInteger()',
+        s.BigInteger(),
     'uint64':
-        'BigInteger(unsigned=True)',
+        s.BigInteger(unsigned=True),
     'float32':
-        'Float(precision=32)',
+        s.Float(precision=32),
     'float64':
-        'Float(precision=64)',
+        s.Float(precision=64),
     'string':
-        'String()',
+        s.String(),
     }
