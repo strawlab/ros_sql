@@ -138,6 +138,7 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name,
                    'col_args': (),
                    'col_kwargs': {'type_':dt},
                    'backref_info_list':[],
+                   'raw_tables':[],
                    }
         return results
 
@@ -178,6 +179,7 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name,
         results = {
             'tab_track_rows':tab_track_rows,
             'backref_info_list':backref_info_list,
+            'raw_tables':rx['raw_tables'],
                    }
     else:
         # _type is another message type
@@ -193,6 +195,7 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name,
                            },
             'tab_track_rows':tab_track_rows,
             'backref_info_list':[],
+            'raw_tables':rx['raw_tables'],
                    }
     return results
 
@@ -221,6 +224,7 @@ def generate_schema_raw( metadata,
     more_texts = []
 
     this_table = sqlalchemy.Table( table_name, metadata )
+    raw_tables = [this_table]
 
     preferred_pk_name = 'id'
     preferred_parent_id_name = 'parent_id'
@@ -253,17 +257,12 @@ def generate_schema_raw( metadata,
         # add column referring back to original table
         this_table.append_column(
             sqlalchemy.Column( foreign_key_column_name,
-                               #sqlalchemy.ForeignKey(parent_pk_name,ondelete='cascade'),
                                sqlalchemy.ForeignKey(parent_table_name+'.'+parent_pk_name,ondelete='cascade'),
                                type_ = parent_pk_type,
-                               #nullable=False, # need to be able to insert as null
-                               )
-            )
+                               ))
 
     if top:
         add_time_cols( this_table, ROS_SQL_COLNAME_PREFIX+'_timestamp' )
-
-    # '''schema for topic %s of type %s'''%(topic_name,msg_class._type)
 
     if known_sql_type is not None:
         this_table.append_column(sqlalchemy.Column('data', known_sql_type))
@@ -276,6 +275,7 @@ def generate_schema_raw( metadata,
             else:
                 results = parse_field( metadata, topic_name+'.'+name, _type, topic_name, name, pk_name, pk_type, table_name )
                 tracking_table_rows.extend( results['tab_track_rows'] )
+                raw_tables.extend( results['raw_tables'] )
 
                 if 'col_args' in results:
                     this_table.append_column(
@@ -294,6 +294,7 @@ def generate_schema_raw( metadata,
                'pk_name':pk_name,
                'table_name':table_name,
                'parent_id_name':parent_id_name,
+               'raw_tables':raw_tables,
                }
     if many_to_one is not None:
         results['foreign_key_column_name']=foreign_key_column_name
@@ -302,9 +303,10 @@ def generate_schema_raw( metadata,
 def gen_schema( metadata, topic_name, msg_class):
     # add table(s) to MetaData instance
     rx = generate_schema_raw(metadata,topic_name,msg_class, top=True)
+    raw_tables = rx['raw_tables']
+    metadata.create_all( metadata.bind )
 
     # add table tracking row to MetaData instance
-    Base.metadata.reflect( metadata.bind )
     Base.metadata.create_all( metadata.bind )
     Session = sqlalchemy.orm.sessionmaker(bind=metadata.bind)
     session = Session()
