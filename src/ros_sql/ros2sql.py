@@ -130,7 +130,6 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name,
                    'col_args': (),
                    'col_kwargs': {'type_':dt},
                    'backref_info_list':[],
-                   'raw_tables':[],
                    }
         return results
 
@@ -168,7 +167,6 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name,
         results = {
             'tab_track_rows':tab_track_rows,
             'backref_info_list':backref_info_list,
-            'raw_tables':rx['raw_tables'],
                    }
     else:
         # _type is another message type
@@ -184,7 +182,6 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name,
                            },
             'tab_track_rows':tab_track_rows,
             'backref_info_list':[],
-            'raw_tables':rx['raw_tables'],
                    }
     return results
 
@@ -207,7 +204,6 @@ def generate_schema_raw( metadata,
     more_texts = []
 
     this_table = sqlalchemy.Table( table_name, metadata )
-    raw_tables = [this_table]
 
     preferred_pk_name = 'id'
     preferred_parent_id_name = 'parent_id'
@@ -258,7 +254,6 @@ def generate_schema_raw( metadata,
             else:
                 results = parse_field( metadata, topic_name+'.'+name, _type, topic_name, name, pk_name, pk_type, table_name )
                 tracking_table_rows.extend( results['tab_track_rows'] )
-                raw_tables.extend( results['raw_tables'] )
 
                 if 'col_args' in results:
                     this_table.append_column(
@@ -277,7 +272,6 @@ def generate_schema_raw( metadata,
                'pk_name':pk_name,
                'table_name':table_name,
                'parent_id_name':parent_id_name,
-               'raw_tables':raw_tables,
                }
     if many_to_one is not None:
         results['foreign_key_column_name']=foreign_key_column_name
