@@ -23,9 +23,9 @@ Base = sqlalchemy.ext.declarative.declarative_base()
 class RosSqlMetadataBackrefs(Base):
     __tablename__ = ROS_SQL_COLNAME_PREFIX + '_backref_metadata'
     id =  sqlalchemy.Column(sqlalchemy.types.Integer, primary_key=True)
-    parent_field = sqlalchemy.Column( sqlalchemy.types.String ) # does not actually exist - created in sql2ros
-    child_table = sqlalchemy.Column( sqlalchemy.types.String ) # name of table
-    child_field = sqlalchemy.Column( sqlalchemy.types.String ) # name of field with foreign key to parent primary key
+    parent_field = sqlalchemy.Column( sqlalchemy.types.String )
+    child_table = sqlalchemy.Column( sqlalchemy.types.String )
+    child_field = sqlalchemy.Column( sqlalchemy.types.String )
 
     main_id = sqlalchemy.Column( sqlalchemy.types.Integer,
                                  sqlalchemy.ForeignKey(ROS_SQL_COLNAME_PREFIX + '_metadata.id' ))
@@ -124,7 +124,8 @@ def slot_type_to_class_name(element_type):
         x = 'UInt' + x[4:]
     return x
 
-def parse_field( metadata, topic_name, _type, source_topic_name, field_name, parent_pk_name, parent_pk_type, parent_table_name ):
+def parse_field( metadata, topic_name, _type, source_topic_name, field_name,
+                 parent_pk_name, parent_pk_type, parent_table_name ):
     """for a given element within a message, find the schema field type"""
     dt = type_map.get(_type,None)
     tab_track_rows = []
@@ -151,30 +152,20 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name, par
         backref_info_list = []
 
         if dt is not None:
-            #dt = slot_type_to_class_name(element_type_name)
-            #msg_class = getattr(std_msgs.msg,element_class_name)
             # array of fundamental type
             element_class_name = slot_type_to_class_name(element_type_name)
             msg_class = getattr(std_msgs.msg,element_class_name)
-            #msg_class = roslib.message.get_message_class(element_class_name)
-
-            rx = generate_schema_raw(metadata,
-                                     topic_name, msg_class, top=False,
-                                     known_sql_type=dt,
-                                     many_to_one=(parent_table_name,parent_pk_name,parent_pk_type),
-                                     )
-                # relationships=[(my_instance_name,
-                #                 'ManyToOne(%r,inverse=%r,%s)'%(
-                # my_class_name,field_name,RELATIONSHIPS))] )
-
+            known_sql_type=dt
         else:
             # array of non-fundamental type
             msg_class = roslib.message.get_message_class(element_type_name)
+            known_sql_type=None
 
-            rx = generate_schema_raw(metadata,
-                                     topic_name, msg_class, top=False,
-                                     many_to_one=(parent_table_name,parent_pk_name,parent_pk_type),
-                                     )
+        rx = generate_schema_raw(metadata,
+                                 topic_name, msg_class, top=False,
+                                 known_sql_type=known_sql_type,
+                                 many_to_one=(parent_table_name,parent_pk_name,parent_pk_type),
+                                 )
         bi = {'parent_field':field_name,
               'child_table':rx['table_name'],
               'child_field':rx['foreign_key_column_name'],
