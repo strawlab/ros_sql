@@ -54,9 +54,6 @@ def get_table_info(metadata,topic_name=None,table_name=None):
     #         #filter(ros2sql.RosSqlMetadata.id==ros2sql.RosSqlMetadataTimestamps.main_id).\
     MsgClass = ros2sql.get_msg_class(mymeta.msg_class_name)
     timestamp_columns = []
-    print '.-='*100
-    print 'mymeta: %r'%mymeta
-    print '.-='*100
     for tsrow in myts:
         timestamp_columns.append(tsrow.column_base_name)
     mybackrefs=session.query(ros2sql.RosSqlMetadataBackrefs).filter_by( main_id=mymeta.id ).all()
@@ -82,19 +79,6 @@ def sql2msg(topic_name,result,metadata):
     table_name = info['table_name']
     this_table = metadata.tables[table_name]
 
-    print
-    print '::::::::::::::::::::::::::: this_table: %r'%this_table
-    #print
-    #print dir(this_table)
-    #print
-    print 'this_table.primary_key',this_table.primary_key
-    for c in this_table.columns:
-        print c
-        print c.name
-        print c.foreign_keys
-        print c.type
-        print
-    print
     inverses = []
     forwards = {}
     for c in this_table.columns:
@@ -115,10 +99,6 @@ def sql2msg(topic_name,result,metadata):
     #         pass
     #     else:
     #         raise NotImplementedError
-    print '='*100
-    print 'result: %r'%type(result)
-    print 'result: %r'%result
-    print
     #d=result.to_dict()
     d = dict(result)
 
@@ -156,8 +136,6 @@ def sql2msg(topic_name,result,metadata):
             conn = metadata.bind.connect()
             sa_result = conn.execute(s)
             msg_actual_sql = sa_result.fetchone()
-            print 'msg_actual_sql',msg_actual_sql
-            print '*'*1000
             sa_result.close()
             if 1:
                 new_msg = sql2msg(new_topic, msg_actual_sql, metadata )['msg']
@@ -183,7 +161,6 @@ def sql2msg(topic_name,result,metadata):
 
             assert name not in d
             d[name] = arr
-    print 'd: %r'%d
 
     for field in info['timestamp_columns']:
         my_secs =  d.pop(field+'_secs')

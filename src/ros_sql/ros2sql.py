@@ -142,7 +142,6 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name, par
     my_instance_name = namify( source_topic_name, mode='instance')
     other_class_name = namify( topic_name, mode='class')
     other_instance_name = namify( topic_name, mode='instance')
-    print 'parsing non-trivial field in topic %r, field name %r'%(topic_name, field_name)
 
     if _type.endswith('[]'):
         # array - need to start another sql table
@@ -234,7 +233,6 @@ def generate_schema_raw( metadata,
     topics2msg = OrderedDict({topic_name: msg_class._type})
     more_texts = []
 
-    print '                                               Table(%r)'%table_name
     this_table = sqlalchemy.Table( table_name, metadata )
 
     if 'id' in msg_class.__slots__:
@@ -282,7 +280,6 @@ def generate_schema_raw( metadata,
             else:
                 results = parse_field( metadata, topic_name+'.'+name, _type, topic_name, name, pk_name, pk_type, table_name )
                 tracking_table_rows.extend( results['tab_track_rows'] )
-                print '--------- parse field results: %r'%results
 
                 if 'col_args' in results:
                     this_table.append_column(
@@ -294,12 +291,6 @@ def generate_schema_raw( metadata,
     tracking_table_rows.append(  {'row_args':(topic_name, table_name, msg_class._type, msg_class._md5sum, top, pk_name),
                                   'timestamp_colnames':timestamp_columns,
                                   'backref_info_list':backref_info_list} )
-
-    print '_________________________________________________'
-    print 'vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv'
-    print '%r'%this_table
-    print '^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^'
-    print '_________________________________________________'
 
     results = {'tracking_table_rows':tracking_table_rows,
                'pk_type':pk_type,
@@ -325,13 +316,9 @@ def gen_schema( metadata, topic_name, msg_class):
         newts_rows = []
         backref_rows = []
         for ts_row in new_meta_row_args['timestamp_colnames']:
-            print 'adding ts_row %r'%ts_row
             newts_row = RosSqlMetadataTimestamps(ts_row)
             newts_rows.append(newts_row)
         for bi in new_meta_row_args['backref_info_list']:
-            print 'bi: %r'%bi
-            print 'args[2]',args[2]
-            print
             backref_row = RosSqlMetadataBackrefs( bi['parent_table'],
                                                   bi['parent_field'],
                                                   bi['child_table'],
