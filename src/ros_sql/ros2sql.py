@@ -100,7 +100,7 @@ def capitalize(name):
     parts = [p.capitalize() for p in parts]
     return ''.join(parts)
 
-def namify( topic_name, mode='class'):
+def namify( topic_name ):
     if topic_name.startswith('/'):
         topic_name = topic_name[1:]
     if '/' in topic_name:
@@ -108,15 +108,7 @@ def namify( topic_name, mode='class'):
 
     topic_name = topic_name.replace('.','_')
 
-    if mode=='class':
-        output = capitalize(topic_name)
-    elif mode=='table':
-        output = topic_name.lower()
-    elif mode=='instance':
-        output = topic_name.lower()
-    else:
-        raise ValueError('unknown mode: %r'%mode)
-    return output
+    return topic_name.lower()
 
 def slot_type_to_class_name(element_type):
     # This is (obviously) a hack, but how to do it right?
@@ -142,10 +134,7 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name,
                    }
         return results
 
-    my_class_name = namify( source_topic_name, mode='class')
-    my_instance_name = namify( source_topic_name, mode='instance')
-    other_class_name = namify( topic_name, mode='class')
-    other_instance_name = namify( topic_name, mode='instance')
+    other_instance_name = namify( topic_name )
 
     if _type.endswith('[]'):
         # array - need to start another sql table
@@ -199,12 +188,6 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name,
                    }
     return results
 
-def dict_to_kwarg_string(kwargs):
-    result = []
-    for k in kwargs:
-        result.append( '%s=%r'%(k, kwargs[k]))
-    return ','.join(result)
-
 def add_time_cols(this_table, prefix):
     this_table.append_column(
         sqlalchemy.Column( prefix+'_secs', type_map['uint64'] ))
@@ -220,7 +203,7 @@ def generate_schema_raw( metadata,
     timestamp_columns = []
     backref_info_list = []
 
-    table_name = namify( topic_name, mode='table')
+    table_name = namify( topic_name )
     more_texts = []
 
     this_table = sqlalchemy.Table( table_name, metadata )

@@ -12,7 +12,7 @@ import ros_sql.ros2sql as ros2sql
 ROS_SQL_COLNAME_PREFIX = ros2sql.ROS_SQL_COLNAME_PREFIX
 
 def get_sql_table( metadata, topic_name ):
-    table_name = ros2sql.namify( topic_name, mode='table')
+    table_name = ros2sql.namify( topic_name )
     return metadata.tables[table_name]
 
 def update_parents( metadata, update_with_parent, topic_name, pk0, conn ):
@@ -152,7 +152,7 @@ def sql2msg(topic_name,result,metadata):
             field_name = key
             field = getattr(result,field_name)
             new_topic = topic_name + '.' + field_name
-            new_table_name = ros2sql.namify( new_topic, mode='table')
+            new_table_name = ros2sql.namify( new_topic )
 
             new_info = get_table_info( metadata, topic_name=new_topic)
 
