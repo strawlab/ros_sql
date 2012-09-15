@@ -3,19 +3,22 @@ import argparse
 import StringIO
 import sys, time
 import Queue
-
-import elixir
+import sqlalchemy
 
 import roslib
 roslib.load_manifest('ros_sql')
 import rospy
 import ros_sql.ros2sql as ros2sql
+import ros_sql.factories as factories
 import rostopic
 import rosgraph.masterapi
 
 class Recorder:
     def __init__(self,topics,bind_url,all=False):
         rospy.init_node('sql_recorder', anonymous=True)
+
+        engine = sqlalchemy.create_engine(bind_url)
+        self.metadata = sqlalchemy.MetaData(bind=engine)
 
         if all:
             assert len(topics)==0
@@ -29,45 +32,19 @@ class Recorder:
                 raise rostopic.ROSTopicIOException(
                     "Unable to communicate with master!")
 
-        texts = []
-        class_names = []
-        table_names = []
-        topic2schema_name = {}
         list_of_topics_and_messages = []
+        topic2msg_class = {}
         for topic in topics:
             msg_class, _, _ = \
                        rostopic.get_topic_class(topic, blocking=True)
-            #print 'topic: %r, msg_class: %r'%(topic,msg_class)
+            topic2msg_class[topic] = msg_class
             list_of_topics_and_messages.append( (topic,msg_class) )
 
-        schema_results = ros2sql.build_schemas(list_of_topics_and_messages)
-        if 1:
-            with open('schema.py',mode='w') as fd:
-                fd.write(schema_results['schema_text'])
-
-        USE_EXEC=False
-        if USE_EXEC:
-            schema_ns = {}
-            exec schema_results['schema_text'] in schema_ns
-            schema = Bunch(**schema_ns) # make it act like a module
-            del schema_ns
-        else:
-            import schema
-            self.schema = schema
-
-            import ros_sql.factories as factories
-            self.factories = factories
-
-        # start elixer operations on schema
-        elixir.metadata.bind = bind_url
-        #elixir.metadata.bind.echo = True
-        elixir.setup_all()
-        elixir.create_all()
+        ros2sql.add_schemas(self.metadata,list_of_topics_and_messages)
 
         self.q = Queue.Queue()
-        for topic in topics:
-            msg_class, _, _ = \
-                       rostopic.get_topic_class(topic, blocking=True)
+        for topic in topic2msg_class:
+            msg_class = topic2msg_class[topic]
             rospy.Subscriber( topic, msg_class, callback=self.cb,
                               callback_args=topic)
 
@@ -79,11 +56,10 @@ class Recorder:
         while not rospy.is_shutdown():
             (now,msg,topic) = self.q.get()
 
-            self.factories.msg2sql(topic,
-                                   msg,
-                                   timestamp=now,
-                                   session=elixir.session)
-            #elixir.session.commit()
+            factories.msg2sql(self.metadata,
+                              topic,
+                              msg,
+                              timestamp=now)
 
 def record(args):
     if args.all and len(args.topic):
