@@ -18,7 +18,6 @@ def get_sql_table( metadata, topic_name ):
 def update_parents( metadata, update_with_parent, topic_name, pk0, conn ):
     for field_name in update_with_parent:
         child_topic = topic_name + '.' + field_name
-        print 'child_topic',child_topic
         child_info = get_table_info( metadata, topic_name=child_topic )
         child_table = metadata.tables[child_info['table_name']]
         child_pk_col = getattr( child_table.c, child_info['pk_name'] )
@@ -81,7 +80,6 @@ def get_table_info(metadata,topic_name=None,table_name=None):
     Session = sqlalchemy.orm.sessionmaker(bind=metadata.bind)
     session = Session()
     if topic_name is not None:
-        print '                   query for topic %r'%topic_name
         try:
             mymeta = _table_info_topic_cache[topic_name]
         except KeyError:
@@ -110,8 +108,6 @@ def get_table_info(metadata,topic_name=None,table_name=None):
                                    'child_table':backref.child_table,
                                    'child_field':backref.child_field,
                                    })
-    print 'mymeta.table_name: %r'%mymeta.table_name
-    print 'backref_info_list: %r'%backref_info_list
     return {'class':MsgClass,
             'top':mymeta.is_top,
             'pk_name':mymeta.pk_name,
@@ -225,11 +221,9 @@ def sql2msg(topic_name,result,metadata):
         d[field] = my_val
 
     for backref in info['backref_info_list']:
-        print '  getting backref: %r'%backref
         backref_values = get_backref_values( backref['child_table'],
                                              backref['child_field'],
                                              my_pk, this_table, metadata )
-        print '  backref_values: %r'%backref_values
         d[ backref['parent_field'] ] = backref_values
 
     msg = MsgClass(**d)
@@ -244,22 +238,13 @@ def get_backref_values( table_name, field, parent_pk, parent_table, metadata ):
     foreign_key_column = getattr(new_table.c,field)
     #s = sqlalchemy.sql.select([new_table], foreign_key_column==parent_pk )
     s = sqlalchemy.sql.select([new_table])
-    print 'foreign_key_column: %r'%foreign_key_column
-    print 'parent_pk: %r'%parent_pk
-    print 'new_table: %r'%new_table
-    print 'new_topic: %r'%new_topic
-    print 'select: %r'%s
 
     conn = metadata.bind.connect()
     sa_result = conn.execute(s)
     msg_actual_sqls = sa_result.fetchall()
     result = []
-    print 'msg_actual_sqls: %r'%msg_actual_sqls
     for msg_actual_sql in msg_actual_sqls:
-        print 'msg_actual_sql: %r'%msg_actual_sql
         new_msg = sql2msg(new_topic, msg_actual_sql, metadata )['msg']
-        print 'new_msg: %r'%new_msg
-        print '*'*1000
         result.append(new_msg)
     sa_result.close()
     return result

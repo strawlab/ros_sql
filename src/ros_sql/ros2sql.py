@@ -343,11 +343,9 @@ def gen_schema( metadata, topic_name, msg_class):
                                                   )
             backref_rows.append( backref_row )
         new_meta_row = RosSqlMetadata(*args)
-        print 'inserting metadata',new_meta_row
         new_meta_row.timestamps = newts_rows
         new_meta_row.backrefs = backref_rows
         session.add(new_meta_row)
-    print
     session.commit()
 
 def add_schemas( metadata, list_of_topics_and_messages ):

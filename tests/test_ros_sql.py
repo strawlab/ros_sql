@@ -90,11 +90,11 @@ def check_roundtrip( topic_name, msg_class, msg_expected ):
     timestamp = result['timestamp']
     msg_actual = result['msg']
 
-    print 'FINAL *************'
-    print
-    print 'msg_expected'
-    print msg_expected
-    print
-    print 'msg_actual'
-    print msg_actual
+    # print 'FINAL *************'
+    # print
+    # print 'msg_expected'
+    # print msg_expected
+    # print
+    # print 'msg_actual'
+    # print msg_actual
     assert msg_actual == msg_expected
