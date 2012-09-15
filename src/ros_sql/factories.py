@@ -15,6 +15,34 @@ def get_sql_table( metadata, topic_name ):
     table_name = ros2sql.namify( topic_name, mode='table')
     return metadata.tables[table_name]
 
+def update_parents( metadata, update_with_parent, topic_name, pk0, conn ):
+    for field_name in update_with_parent:
+        child_topic = topic_name + '.' + field_name
+        print 'child_topic',child_topic
+        child_info = get_table_info( metadata, topic_name=child_topic )
+        child_table = metadata.tables[child_info['table_name']]
+        child_pk_col = getattr( child_table.c, child_info['pk_name'] )
+
+        parent_id_name = child_info['parent_id_name']
+        kwargs = {parent_id_name:sqlalchemy.sql.bindparam('backref_id')}
+
+        u = child_table.update().\
+            where( child_pk_col==sqlalchemy.sql.bindparam('child_id')).\
+            values( **kwargs )
+
+        args = []
+        for child_id in update_with_parent[field_name]:
+            args.append( {'child_id':child_id, 'backref_id':pk0} )
+
+        trans = conn.begin()
+        try:
+            result = conn.execute( u, *args )
+            trans.commit()
+        except:
+            trans.rollback()
+            raise
+
+
 def msg2sql(metadata, topic_name, msg, timestamp=None):
     '''top-level call to generate commands for saving topic'''
     if timestamp is None:
@@ -42,48 +70,35 @@ def msg2sql(metadata, topic_name, msg, timestamp=None):
     pk = result.inserted_primary_key
     assert len(pk)==1
     pk0 = pk[0]
+    update_parents( metadata, update_with_parent, topic_name, pk0, conn )
 
-    for field_name in update_with_parent:
-        child_topic = topic_name + '.' + field_name
-        print 'child_topic',child_topic
-        child_info = get_table_info( metadata, topic_name=child_topic )
-        child_table = metadata.tables[child_info['table_name']]
-        child_pk_col = getattr( child_table.c, child_info['pk_name'] )
-
-        parent_id_name = child_info['parent_id_name']
-        kwargs = {parent_id_name:sqlalchemy.sql.bindparam('backref_id')}
-
-        u = child_table.update().\
-            where( child_pk_col==sqlalchemy.sql.bindparam('child_id')).\
-            values( **kwargs )
-
-        args = []
-        for child_id in update_with_parent[field_name]:
-            args.append( {'child_id':child_id, 'backref_id':pk0} )
-
-        trans = conn.begin()
-        try:
-            result = conn.execute( u, *args )
-            trans.commit()
-        except:
-            trans.rollback()
-            raise
-
+_table_info_topic_cache = {}
+_table_info_table_cache = {}
 def get_table_info(metadata,topic_name=None,table_name=None):
+    global _table_info_topic_cache
+    global _table_info_table_cache
+
     Session = sqlalchemy.orm.sessionmaker(bind=metadata.bind)
     session = Session()
     if topic_name is not None:
         print '                   query for topic %r'%topic_name
-        mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(topic_name=topic_name).one()
+        try:
+            mymeta = _table_info_topic_cache[topic_name]
+        except KeyError:
+            mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(topic_name=topic_name).one()
+            _table_info_topic_cache[topic_name] = mymeta
+            _table_info_table_cache[mymeta.table_name] = mymeta
         if table_name is not None:
             assert mymeta.table_name == table_name
     else:
         assert table_name is not None
-        mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(table_name=table_name).one()
+        try:
+            mymeta = _table_info_table_cache[table_name]
+        except KeyError:
+            mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(table_name=table_name).one()
+            _table_info_table_cache[table_name] = mymeta
+            _table_info_topic_cache[mymeta.topic_name] = mymeta
     myts=session.query(ros2sql.RosSqlMetadataTimestamps).filter_by( main_id=mymeta.id ).all()
-    # mymeta=session.query(ros2sql.RosSqlMetadata,ros2sql.RosSqlMetadataTimestamps).\
-    #         filter(ros2sql.RosSqlMetadata.topic_name==topic_name).one()
-    #         #filter(ros2sql.RosSqlMetadata.id==ros2sql.RosSqlMetadataTimestamps.main_id).\
     MsgClass = ros2sql.get_msg_class(mymeta.msg_class_name)
     timestamp_columns = []
     for tsrow in myts:
@@ -105,6 +120,7 @@ def get_table_info(metadata,topic_name=None,table_name=None):
             'timestamp_columns':timestamp_columns,
             'backref_info_list':backref_info_list,
             'parent_id_name':mymeta.parent_id_name,
+            'is_fundamental_type':mymeta.is_fundamental_type,
             }
 
 def sql2msg(topic_name,result,metadata):
@@ -241,10 +257,14 @@ def get_backref_values( table_name, field, parent_pk, parent_table, metadata ):
     result = []
     print 'msg_actual_sqls: %r'%msg_actual_sqls
     for msg_actual_sql in msg_actual_sqls:
-        print 'msg_actual_sql',msg_actual_sql
-        print '*'*1000
+        print 'msg_actual_sql: %r'%msg_actual_sql
         new_msg = sql2msg(new_topic, msg_actual_sql, metadata )['msg']
-        result.append(new_msg)
+        print 'new_msg: %r'%new_msg
+        print '*'*1000
+        if new_info['is_fundamental_type']:
+            result.append(new_msg.data)
+        else:
+            result.append(new_msg)
     sa_result.close()
     return result
 
@@ -257,8 +277,6 @@ def insert_row( metadata, topic_name, name, value ):
 
     if isinstance(value, roslib.message.Message ):
         kwargs, atts, update_with_parent = msg2dict( metadata, name2, value )
-        if len(update_with_parent) > 0:
-            raise NotImplementedError
         kw2 = {}
         for k,row in atts:
             assert k not in kwargs # not already there
@@ -267,6 +285,7 @@ def insert_row( metadata, topic_name, name, value ):
         kwargs.update(kw2)
     else:
         kwargs = {'data':value}
+        update_with_parent = None
 
     ins = this_table.insert()
 
@@ -283,6 +302,10 @@ def insert_row( metadata, topic_name, name, value ):
     pk = result.inserted_primary_key
     assert len(pk)==1
     pk0 = pk[0]
+
+    if update_with_parent is not None:
+        update_parents( metadata, update_with_parent, name2, pk0, conn )
+
     return pk0
 
 def msg2dict(metadata,topic_name,msg):
