@@ -107,14 +107,14 @@ def namify( topic_name, mode='class'):
 
     topic_name = topic_name.replace('.','_')
 
-    if mode=='module':
-        output = topic_name.lower()
-    elif mode=='class':
+    if mode=='class':
         output = capitalize(topic_name)
     elif mode=='table':
         output = topic_name.lower()
     elif mode=='instance':
         output = topic_name.lower()
+    else:
+        raise ValueError('unknown mode: %r'%mode)
     return output
 
 def slot_type_to_class_name(element_type):
