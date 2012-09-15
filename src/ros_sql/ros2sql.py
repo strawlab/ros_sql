@@ -19,21 +19,17 @@ import std_msgs
 ROS_SQL_COLNAME_PREFIX = '_ros_sql'
 
 Base = sqlalchemy.ext.declarative.declarative_base()
-#Base = sqlalchemy.ext.declarative.declarative_base(
-#    cls=sqlalchemy.ext.declarative.DeclarativeReflectedBase)
 
 class RosSqlMetadataBackrefs(Base):
     __tablename__ = ROS_SQL_COLNAME_PREFIX + '_backref_metadata'
     id =  sqlalchemy.Column(sqlalchemy.types.Integer, primary_key=True)
-    parent_table = sqlalchemy.Column( sqlalchemy.types.String ) # probably redundant, since main_id points to this
     parent_field = sqlalchemy.Column( sqlalchemy.types.String ) # does not actually exist - created in sql2ros
     child_table = sqlalchemy.Column( sqlalchemy.types.String ) # name of table
     child_field = sqlalchemy.Column( sqlalchemy.types.String ) # name of field with foreign key to parent primary key
 
     main_id = sqlalchemy.Column( sqlalchemy.types.Integer,
                                  sqlalchemy.ForeignKey(ROS_SQL_COLNAME_PREFIX + '_metadata.id' ))
-    def __init__(self, parent_table, parent_field, child_table, child_field):
-        self.parent_table = parent_table
+    def __init__(self, parent_field, child_table, child_field):
         self.parent_field = parent_field
         self.child_table = child_table
         self.child_field = child_field
@@ -179,8 +175,7 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name, par
                                      topic_name, msg_class, top=False,
                                      many_to_one=(parent_table_name,parent_pk_name,parent_pk_type),
                                      )
-        bi = {'parent_table':parent_table_name,
-              'parent_field':field_name,
+        bi = {'parent_field':field_name,
               'child_table':rx['table_name'],
               'child_field':rx['foreign_key_column_name'],
               }
@@ -336,8 +331,7 @@ def gen_schema( metadata, topic_name, msg_class):
             newts_row = RosSqlMetadataTimestamps(ts_row)
             newts_rows.append(newts_row)
         for bi in new_meta_row_args['backref_info_list']:
-            backref_row = RosSqlMetadataBackrefs( bi['parent_table'],
-                                                  bi['parent_field'],
+            backref_row = RosSqlMetadataBackrefs( bi['parent_field'],
                                                   bi['child_table'],
                                                   bi['child_field'],
                                                   )
