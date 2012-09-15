@@ -62,7 +62,6 @@ class RosSqlMetadata(Base):
     is_top = sqlalchemy.Column( sqlalchemy.types.Boolean )
     pk_name = sqlalchemy.Column( sqlalchemy.types.String )
     parent_id_name = sqlalchemy.Column( sqlalchemy.types.String )
-    is_fundamental_type = sqlalchemy.Column( sqlalchemy.types.Boolean )
 
     timestamps = sqlalchemy.orm.relationship("RosSqlMetadataTimestamps",
                                              order_by="RosSqlMetadataTimestamps.id",
@@ -70,7 +69,7 @@ class RosSqlMetadata(Base):
     backrefs = sqlalchemy.orm.relationship("RosSqlMetadataBackrefs",
                                            backref=sqlalchemy.orm.backref(ROS_SQL_COLNAME_PREFIX + '_metadata'))
 
-    def __init__(self, topic_name, table_name, msg_class, msg_md5,is_top,pk_name,parent_id_name,is_fundamental_type):
+    def __init__(self, topic_name, table_name, msg_class, msg_md5,is_top,pk_name,parent_id_name):
         self.topic_name = topic_name
         self.table_name = table_name
         self.msg_class_name = msg_class
@@ -78,10 +77,9 @@ class RosSqlMetadata(Base):
         self.is_top = is_top
         self.pk_name = pk_name
         self.parent_id_name = parent_id_name
-        self.is_fundamental_type = is_fundamental_type
 
     def __repr__(self):
-        return "<RosSqlMetadata(%r,%r,%r,%r,%r,%r,%r,%r)>"%(
+        return "<RosSqlMetadata(%r,%r,%r,%r,%r,%r,%r)>"%(
             self.topic_name,
             self.table_name,
             self.msg_class_name,
@@ -89,7 +87,6 @@ class RosSqlMetadata(Base):
             self.is_top,
             self.pk_name,
             self.parent_id_name,
-            self.is_fundamental_type,
             )
 
 def get_msg_class(msg_name):
@@ -143,7 +140,6 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name, par
                    'col_args': (),
                    'col_kwargs': {'type_':dt},
                    'backref_info_list':[],
-                   'is_fundamental_type':True,
                    }
         return results
 
@@ -233,7 +229,6 @@ def generate_schema_raw( metadata,
     tracking_table_rows = []
     timestamp_columns = []
     backref_info_list = []
-    is_fundamental_type = False
 
     #class_name = namify( topic_name, mode='class')
     table_name = namify( topic_name, mode='table')
@@ -291,7 +286,6 @@ def generate_schema_raw( metadata,
 
     if known_sql_type is not None:
         this_table.append_column(sqlalchemy.Column('data', known_sql_type))
-        is_fundamental_type = True
     else:
         for name, _type in zip(msg_class.__slots__, msg_class._slot_types):
             if _type=='time':
@@ -309,18 +303,8 @@ def generate_schema_raw( metadata,
                                           **results['col_kwargs'] ))
                 backref_info_list.extend( results['backref_info_list'] )
 
-        print 'len(msg_class.__slots__)',len(msg_class.__slots__)
-        print 'msg_class.__slots__',msg_class.__slots__
-        print 'name',name
-        if len(msg_class.__slots__)==1:
-            print "results['is_fundamental_type']",results['is_fundamental_type']
-        print
-
-        if len(msg_class.__slots__)==1 and name=='data' and results['is_fundamental_type']:
-            is_fundamental_type=True
-
     # these are the args to RosSqlMetadata:
-    tracking_table_rows.append(  {'row_args':(topic_name, table_name, msg_class._type, msg_class._md5sum, top, pk_name, parent_id_name, is_fundamental_type),
+    tracking_table_rows.append(  {'row_args':(topic_name, table_name, msg_class._type, msg_class._md5sum, top, pk_name, parent_id_name),
                                   'timestamp_colnames':timestamp_columns,
                                   'backref_info_list':backref_info_list} )
 

@@ -120,7 +120,6 @@ def get_table_info(metadata,topic_name=None,table_name=None):
             'timestamp_columns':timestamp_columns,
             'backref_info_list':backref_info_list,
             'parent_id_name':mymeta.parent_id_name,
-            'is_fundamental_type':mymeta.is_fundamental_type,
             }
 
 def sql2msg(topic_name,result,metadata):
@@ -261,10 +260,7 @@ def get_backref_values( table_name, field, parent_pk, parent_table, metadata ):
         new_msg = sql2msg(new_topic, msg_actual_sql, metadata )['msg']
         print 'new_msg: %r'%new_msg
         print '*'*1000
-        if new_info['is_fundamental_type']:
-            result.append(new_msg.data)
-        else:
-            result.append(new_msg)
+        result.append(new_msg)
     sa_result.close()
     return result
 
