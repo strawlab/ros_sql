@@ -38,10 +38,16 @@ def msg2sql(metadata, topic_name, msg, timestamp=None):
         trans.rollback()
         raise
 
-def get_table_info(topic_name,metadata):
+def get_table_info(metadata,topic_name=None,table_name=None):
     Session = sqlalchemy.orm.sessionmaker(bind=metadata.bind)
     session = Session()
-    mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(topic_name=topic_name).one()
+    if topic_name is not None:
+        mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(topic_name=topic_name).one()
+        if table_name is not None:
+            assert mymeta.table_name == table_name
+    else:
+        assert table_name is not None
+        mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(table_name=table_name).one()
     myts=session.query(ros2sql.RosSqlMetadataTimestamps).filter_by( main_id=mymeta.id ).all()
     # mymeta=session.query(ros2sql.RosSqlMetadata,ros2sql.RosSqlMetadataTimestamps).\
     #         filter(ros2sql.RosSqlMetadata.topic_name==topic_name).one()
@@ -53,15 +59,25 @@ def get_table_info(topic_name,metadata):
     print '.-='*100
     for tsrow in myts:
         timestamp_columns.append(tsrow.column_base_name)
+    mybackrefs=session.query(ros2sql.RosSqlMetadataBackrefs).filter_by( main_id=mymeta.id ).all()
+    backref_info_list = []
+    for backref in mybackrefs:
+        backref_info_list.append( {'parent_field':backref.parent_field,
+                                   'child_table':backref.child_table,
+                                   'child_field':backref.child_field,
+                                   })
     return {'class':MsgClass,
             'top':mymeta.is_top,
+            'pk_name':mymeta.pk_name,
             'table_name':mymeta.table_name,
+            'topic_name':mymeta.topic_name,
             'timestamp_columns':timestamp_columns,
+            'backref_info_list':backref_info_list,
             }
 
 def sql2msg(topic_name,result,metadata):
     '''convert query result into message'''
-    info = get_table_info( topic_name, metadata )
+    info = get_table_info( metadata, topic_name=topic_name)
     MsgClass = info['class']
     table_name = info['table_name']
     this_table = metadata.tables[table_name]
@@ -113,10 +129,7 @@ def sql2msg(topic_name,result,metadata):
         top_nsecs = d.pop(ROS_SQL_COLNAME_PREFIX+'_timestamp_nsecs')
         results['timestamp'] = rospy.Time( top_secs, top_nsecs )
 
-    for col in this_table.primary_key:
-        pk_name = col.name
-        if pk_name.startswith(ROS_SQL_COLNAME_PREFIX):
-            d.pop(pk_name)
+    my_pk = d.pop( info['pk_name'] )
 
     for key in d.keys():
         for fk in forwards.get(key,[]):
@@ -127,14 +140,16 @@ def sql2msg(topic_name,result,metadata):
             new_topic = topic_name + '.' + field_name
             new_table_name = ros2sql.namify( new_topic, mode='table')
 
-            pk_name = ROS_SQL_COLNAME_PREFIX+new_table_name+'_id'
+            new_info = get_table_info( metadata, topic_name=new_topic)
+
+            pk_name = new_info['pk_name']
 
             fk = d.pop(field_name)
             # --------------------
 
             # get back from SQL
             new_table = get_sql_table( metadata, new_topic )
-            new_info = get_table_info(new_topic, metadata)
+
             new_primary_key_column = getattr(new_table.c,pk_name)
             s = sqlalchemy.sql.select([new_table], new_primary_key_column==fk )
 
@@ -176,13 +191,39 @@ def sql2msg(topic_name,result,metadata):
         my_val = rospy.Time( my_secs, my_nsecs )
         d[field] = my_val
 
+    for backref in info['backref_info_list']:
+        backref_values = get_backref_values( backref['child_table'],
+                                             backref['child_field'],
+                                             my_pk, this_table, metadata )
+        d[ backref['parent_field'] ] = backref_values
+
     msg = MsgClass(**d)
     results['msg'] = msg
     return results
 
+def get_backref_values( table_name, field, parent_pk, parent_table, metadata ):
+
+    new_info = get_table_info(metadata, table_name=table_name)
+    new_table = metadata.tables[new_info['table_name']]
+    new_topic = new_info['topic_name']
+    foreign_key_column = getattr(new_table.c,field)
+    s = sqlalchemy.sql.select([new_table], foreign_key_column==parent_pk )
+
+    conn = metadata.bind.connect()
+    sa_result = conn.execute(s)
+    msg_actual_sqls = sa_result.fetchall()
+    result = []
+    for msq_actual_sql in msg_actual_sqls:
+        print 'msg_actual_sql',msg_actual_sql
+        print '*'*1000
+        new_msg = sql2msg(new_topic, msg_actual_sql, metadata )['msg']
+        result.append(new_msg)
+    sa_result.close()
+    return result
+
 def insert_row( metadata, topic_name, name, value ):
     name2 = topic_name + '.' + name
-    info = get_table_info( name2, metadata )
+    info = get_table_info( metadata, topic_name=name2)
 
     table_name = info['table_name']
     this_table = metadata.tables[table_name]

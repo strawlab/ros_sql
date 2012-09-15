@@ -22,14 +22,21 @@ Base = sqlalchemy.ext.declarative.declarative_base()
 #Base = sqlalchemy.ext.declarative.declarative_base(
 #    cls=sqlalchemy.ext.declarative.DeclarativeReflectedBase)
 
-class RosSqlMetadataArrays(Base):
-    __tablename__ = ROS_SQL_COLNAME_PREFIX + '_arrays'
+class RosSqlMetadataBackrefs(Base):
+    __tablename__ = ROS_SQL_COLNAME_PREFIX + '_backref_metadata'
     id =  sqlalchemy.Column(sqlalchemy.types.Integer, primary_key=True)
-    field_name = sqlalchemy.Column( sqlalchemy.types.String )
-    table_name = sqlalchemy.Column( sqlalchemy.types.String )
-    def __init__(self, field_name, table_name):
-        self.field_name = field_name
-        self.table_name = table_name
+    parent_table = sqlalchemy.Column( sqlalchemy.types.String ) # probably redundant, since main_id points to this
+    parent_field = sqlalchemy.Column( sqlalchemy.types.String ) # does not actually exist - created in sql2ros
+    child_table = sqlalchemy.Column( sqlalchemy.types.String ) # name of table
+    child_field = sqlalchemy.Column( sqlalchemy.types.String ) # name of field with foreign key to parent primary key
+
+    main_id = sqlalchemy.Column( sqlalchemy.types.Integer,
+                                 sqlalchemy.ForeignKey(ROS_SQL_COLNAME_PREFIX + '_metadata.id' ))
+    def __init__(self, parent_table, parent_field, child_table, child_field):
+        self.parent_table = parent_table
+        self.parent_field = parent_field
+        self.child_table = child_table
+        self.child_field = child_field
 
 class RosSqlMetadataTimestamps(Base):
     """keep track of names of Time fields"""
@@ -53,24 +60,29 @@ class RosSqlMetadata(Base):
     msg_class_name = sqlalchemy.Column( sqlalchemy.types.String )
     msg_md5sum = sqlalchemy.Column( sqlalchemy.types.String )
     is_top = sqlalchemy.Column( sqlalchemy.types.Boolean )
+    pk_name = sqlalchemy.Column( sqlalchemy.types.String )
 
     timestamps = sqlalchemy.orm.relationship("RosSqlMetadataTimestamps",
                                              order_by="RosSqlMetadataTimestamps.id",
                                              backref=sqlalchemy.orm.backref(ROS_SQL_COLNAME_PREFIX + '_metadata'))
+    backrefs = sqlalchemy.orm.relationship("RosSqlMetadataBackrefs",
+                                           backref=sqlalchemy.orm.backref(ROS_SQL_COLNAME_PREFIX + '_metadata'))
 
-    def __init__(self, topic_name, table_name, msg_class, msg_md5,is_top):
+    def __init__(self, topic_name, table_name, msg_class, msg_md5,is_top,pk_name):
         self.topic_name = topic_name
         self.table_name = table_name
         self.msg_class_name = msg_class
         self.msg_md5sum = msg_md5
         self.is_top = is_top
+        self.pk_name = pk_name
 
     def __repr__(self):
-        return "<RosSqlMetadata(%r,%r,%r,%r,%r)>"%( self.topic_name,
-                                                    self.table_name,
-                                                    self.msg_class_name,
-                                                    self.msg_md5sum,
-                                                    self.is_top)
+        return "<RosSqlMetadata(%r,%r,%r,%r,%r,%r)>"%( self.topic_name,
+                                                       self.table_name,
+                                                       self.msg_class_name,
+                                                       self.msg_md5sum,
+                                                       self.is_top,
+                                                       self.pk_name)
 
 def get_msg_class(msg_name):
     p1,p2 = msg_name.split('/')
@@ -122,6 +134,7 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name, par
                    'tab_track_rows':tab_track_rows,
                    'col_args': (),
                    'col_kwargs': {'type_':dt},
+                   'backref_info_list':[],
                    }
         return results
 
@@ -135,6 +148,7 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name, par
         # array - need to start another sql table
         element_type = _type[:-2]
         dt = type_map.get(element_type,None)
+        backref_info_list = []
 
         if dt is not None:
             78945/0
@@ -156,15 +170,22 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name, par
                                      topic_name, msg_class, top=False,
                                      many_to_one=(parent_table_name,parent_pk_name,parent_pk_type),
                                      )
+            bi = {'parent_table':parent_table_name,
+                  'parent_field':field_name,
+                  'child_table':rx['table_name'],
+                  'child_field':rx['foreign_key_column_name'],
+                  }
+            backref_info_list.append( bi )
 
         tab_track_rows.extend( rx['tracking_table_rows'] )
         other_key_name = other_instance_name + '.' + rx['pk_name']
         results = {
-            'col_args': ( sqlalchemy.ForeignKey(other_key_name,ondelete='cascade'), ),
-            'col_kwargs': {'type_':rx['pk_type'],
-                           'nullable':False,
-                           },
+            # 'col_args': ( sqlalchemy.ForeignKey(other_key_name,ondelete='cascade'), ),
+            # 'col_kwargs': {'type_':rx['pk_type'],
+            #                'nullable':False,
+            #                },
             'tab_track_rows':tab_track_rows,
+            'backref_info_list':backref_info_list,
                    }
     else:
         # _type is another message type
@@ -179,6 +200,7 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name, par
                            'nullable':False,
                            },
             'tab_track_rows':tab_track_rows,
+            'backref_info_list':[],
                    }
     return results
 
@@ -201,6 +223,7 @@ def generate_schema_raw( metadata,
     """convert a message type into a Python source code string"""
     tracking_table_rows = []
     timestamp_columns = []
+    backref_info_list = []
 
     #class_name = namify( topic_name, mode='class')
     table_name = namify( topic_name, mode='table')
@@ -214,7 +237,11 @@ def generate_schema_raw( metadata,
     print '                                               Table(%r)'%table_name
     this_table = sqlalchemy.Table( table_name, metadata )
 
-    pk_name = ROS_SQL_COLNAME_PREFIX+table_name+'_id'
+    if 'id' in msg_class.__slots__:
+        pk_name = ROS_SQL_COLNAME_PREFIX+table_name+'_id'
+        assert pk_name not in msg_class.__slots__
+    else:
+        pk_name = 'id'
 
     assert pk_name not in msg_class.__slots__
     assert (ROS_SQL_COLNAME_PREFIX+'_timestamp_secs') not in msg_class.__slots__
@@ -227,15 +254,15 @@ def generate_schema_raw( metadata,
                           pk_type,
                           primary_key=True))
 
+    foreign_key_column_name = 'parent_id'
     if many_to_one is not None:
         parent_table_name, parent_pk_name, parent_pk_type = many_to_one
         # add column referring back to original table
         this_table.append_column(
-            sqlalchemy.Column( 'parent_id',
+            sqlalchemy.Column( foreign_key_column_name,
                                #sqlalchemy.ForeignKey(parent_pk_name,ondelete='cascade'),
                                sqlalchemy.ForeignKey(parent_table_name+'.'+parent_pk_name,ondelete='cascade'),
                                type_ = parent_pk_type,
-                               nullable = False,
                                )
             )
 
@@ -257,9 +284,16 @@ def generate_schema_raw( metadata,
                 tracking_table_rows.extend( results['tab_track_rows'] )
                 print '--------- parse field results: %r'%results
 
-                this_table.append_column( sqlalchemy.Column(name, *results['col_args'], **results['col_kwargs'] ))
+                if 'col_args' in results:
+                    this_table.append_column(
+                        sqlalchemy.Column(name,
+                                          *results['col_args'],
+                                          **results['col_kwargs'] ))
+                backref_info_list.extend( results['backref_info_list'] )
 
-    tracking_table_rows.append(  (topic_name, table_name, msg_class._type, msg_class._md5sum, top, timestamp_columns) )
+    tracking_table_rows.append(  {'row_args':(topic_name, table_name, msg_class._type, msg_class._md5sum, top, pk_name),
+                                  'timestamp_colnames':timestamp_columns,
+                                  'backref_info_list':backref_info_list} )
 
     print '_________________________________________________'
     print 'vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv'
@@ -267,10 +301,14 @@ def generate_schema_raw( metadata,
     print '^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^'
     print '_________________________________________________'
 
-    return {'tracking_table_rows':tracking_table_rows,
-            'pk_type':pk_type,
-            'pk_name':pk_name,
-            }
+    results = {'tracking_table_rows':tracking_table_rows,
+               'pk_type':pk_type,
+               'pk_name':pk_name,
+               'table_name':table_name,
+               }
+    if many_to_one is not None:
+        results['foreign_key_column_name']=foreign_key_column_name
+    return results
 
 def gen_schema( metadata, topic_name, msg_class):
     # add table(s) to MetaData instance
@@ -283,15 +321,26 @@ def gen_schema( metadata, topic_name, msg_class):
     session = Session()
 
     for new_meta_row_args in rx['tracking_table_rows']:
-        timestamp_rows = new_meta_row_args[-1]
-        args = new_meta_row_args[:-1]
+        args = new_meta_row_args['row_args']
         newts_rows = []
-        for ts_row in timestamp_rows:
+        backref_rows = []
+        for ts_row in new_meta_row_args['timestamp_colnames']:
             print 'adding ts_row %r'%ts_row
             newts_row = RosSqlMetadataTimestamps(ts_row)
             newts_rows.append(newts_row)
+        for bi in new_meta_row_args['backref_info_list']:
+            print 'bi: %r'%bi
+            print 'args[2]',args[2]
+            print
+            backref_row = RosSqlMetadataBackrefs( bi['parent_table'],
+                                                  bi['parent_field'],
+                                                  bi['child_table'],
+                                                  bi['child_field'],
+                                                  )
+            backref_rows.append( backref_row )
         new_meta_row = RosSqlMetadata(*args)
         new_meta_row.timestamps = newts_rows
+        new_meta_row.backrefs = backref_rows
         session.add(new_meta_row)
     session.commit()
 
