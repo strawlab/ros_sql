@@ -50,13 +50,16 @@ def msg2sql(metadata, topic_name, msg, timestamp=None):
         child_table = metadata.tables[child_info['table_name']]
         child_pk_col = getattr( child_table.c, child_info['pk_name'] )
 
+        parent_id_name = child_info['parent_id_name']
+        kwargs = {parent_id_name:sqlalchemy.sql.bindparam('backref_id')}
+
         u = child_table.update().\
             where( child_pk_col==sqlalchemy.sql.bindparam('child_id')).\
-            values( parent_id=sqlalchemy.sql.bindparam('parent_id'))
+            values( **kwargs )
 
         args = []
         for child_id in update_with_parent[field_name]:
-            args.append( {'child_id':child_id, 'parent_id':pk0} )
+            args.append( {'child_id':child_id, 'backref_id':pk0} )
 
         trans = conn.begin()
         try:
@@ -101,6 +104,7 @@ def get_table_info(metadata,topic_name=None,table_name=None):
             'topic_name':mymeta.topic_name,
             'timestamp_columns':timestamp_columns,
             'backref_info_list':backref_info_list,
+            'parent_id_name':mymeta.parent_id_name,
             }
 
 def sql2msg(topic_name,result,metadata):
@@ -142,8 +146,11 @@ def sql2msg(topic_name,result,metadata):
 
     my_pk = d.pop( info['pk_name'] )
 
-    if 'parent_id' in d:
-        d.pop( 'parent_id' )
+
+    parent_id_name = info['parent_id_name']
+    if parent_id_name in d:
+        # don't populate resulting message with this
+        d.pop( parent_id_name )
 
     for key in d.keys():
         for fk in forwards.get(key,[]):

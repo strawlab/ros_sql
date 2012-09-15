@@ -61,6 +61,7 @@ class RosSqlMetadata(Base):
     msg_md5sum = sqlalchemy.Column( sqlalchemy.types.String )
     is_top = sqlalchemy.Column( sqlalchemy.types.Boolean )
     pk_name = sqlalchemy.Column( sqlalchemy.types.String )
+    parent_id_name = sqlalchemy.Column( sqlalchemy.types.String )
 
     timestamps = sqlalchemy.orm.relationship("RosSqlMetadataTimestamps",
                                              order_by="RosSqlMetadataTimestamps.id",
@@ -68,21 +69,25 @@ class RosSqlMetadata(Base):
     backrefs = sqlalchemy.orm.relationship("RosSqlMetadataBackrefs",
                                            backref=sqlalchemy.orm.backref(ROS_SQL_COLNAME_PREFIX + '_metadata'))
 
-    def __init__(self, topic_name, table_name, msg_class, msg_md5,is_top,pk_name):
+    def __init__(self, topic_name, table_name, msg_class, msg_md5,is_top,pk_name,parent_id_name):
         self.topic_name = topic_name
         self.table_name = table_name
         self.msg_class_name = msg_class
         self.msg_md5sum = msg_md5
         self.is_top = is_top
         self.pk_name = pk_name
+        self.parent_id_name = parent_id_name
 
     def __repr__(self):
-        return "<RosSqlMetadata(%r,%r,%r,%r,%r,%r)>"%( self.topic_name,
-                                                       self.table_name,
-                                                       self.msg_class_name,
-                                                       self.msg_md5sum,
-                                                       self.is_top,
-                                                       self.pk_name)
+        return "<RosSqlMetadata(%r,%r,%r,%r,%r,%r,%r)>"%(
+            self.topic_name,
+            self.table_name,
+            self.msg_class_name,
+            self.msg_md5sum,
+            self.is_top,
+            self.pk_name,
+            self.parent_id_name,
+            )
 
 def get_msg_class(msg_name):
     p1,p2 = msg_name.split('/')
@@ -235,13 +240,21 @@ def generate_schema_raw( metadata,
 
     this_table = sqlalchemy.Table( table_name, metadata )
 
-    if 'id' in msg_class.__slots__:
+    preferred_pk_name = 'id'
+    preferred_parent_id_name = 'parent_id'
+
+    if preferred_pk_name in msg_class.__slots__:
         pk_name = ROS_SQL_COLNAME_PREFIX+table_name+'_id'
-        assert pk_name not in msg_class.__slots__
     else:
-        pk_name = 'id'
+        pk_name = preferred_pk_name
+
+    if preferred_parent_id_name in msg_class.__slots__:
+        parent_id_name = ROS_SQL_COLNAME_PREFIX+table_name+'_parent_id'
+    else:
+        parent_id_name = preferred_parent_id_name
 
     assert pk_name not in msg_class.__slots__
+    assert parent_id_name not in msg_class.__slots__
     assert (ROS_SQL_COLNAME_PREFIX+'_timestamp_secs') not in msg_class.__slots__
     assert (ROS_SQL_COLNAME_PREFIX+'_timestamp_nsecs') not in msg_class.__slots__
 
@@ -252,7 +265,7 @@ def generate_schema_raw( metadata,
                           pk_type,
                           primary_key=True))
 
-    foreign_key_column_name = 'parent_id'
+    foreign_key_column_name = parent_id_name
     if many_to_one is not None:
         parent_table_name, parent_pk_name, parent_pk_type = many_to_one
         # add column referring back to original table
@@ -289,7 +302,8 @@ def generate_schema_raw( metadata,
                                           **results['col_kwargs'] ))
                 backref_info_list.extend( results['backref_info_list'] )
 
-    tracking_table_rows.append(  {'row_args':(topic_name, table_name, msg_class._type, msg_class._md5sum, top, pk_name),
+    # these are the args to RosSqlMetadata:
+    tracking_table_rows.append(  {'row_args':(topic_name, table_name, msg_class._type, msg_class._md5sum, top, pk_name, parent_id_name),
                                   'timestamp_colnames':timestamp_columns,
                                   'backref_info_list':backref_info_list} )
 
@@ -297,6 +311,7 @@ def generate_schema_raw( metadata,
                'pk_type':pk_type,
                'pk_name':pk_name,
                'table_name':table_name,
+               'parent_id_name':parent_id_name,
                }
     if many_to_one is not None:
         results['foreign_key_column_name']=foreign_key_column_name
