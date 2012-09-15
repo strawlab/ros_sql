@@ -54,13 +54,13 @@ def test_simple_message_roundtrip():
     tc.header = header
 
     bma = std_msgs.msg.ByteMultiArray()
-    bma.data = [77, 33, 254]
+    bma.data = [ std_msgs.msg.Byte(x) for x in [77, 33, 254] ]
 
-    for tn,mc,md in [#('/test_string',std_msgs.msg.String, std_msgs.msg.String('xyz')),
-                     #('/test_int8', std_msgs.msg.Int8, std_msgs.msg.Int8(-4)),
-                     #('/test_uint8', std_msgs.msg.UInt8, std_msgs.msg.UInt8(254)),
-                     #('/test_pose', geometry_msgs.msg.Pose, pose1),
-                     #('/myheader', std_msgs.msg.Header, header),
+    for tn,mc,md in [('/test_string',std_msgs.msg.String, std_msgs.msg.String('xyz')),
+                     ('/test_int8', std_msgs.msg.Int8, std_msgs.msg.Int8(-4)),
+                     ('/test_uint8', std_msgs.msg.UInt8, std_msgs.msg.UInt8(254)),
+                     ('/test_pose', geometry_msgs.msg.Pose, pose1),
+                     ('/myheader', std_msgs.msg.Header, header),
                      ('/byte_arr_topic', std_msgs.msg.ByteMultiArray, bma),
                      ('/test_pose_array', geometry_msgs.msg.PoseArray, pa1),
                      ('/test_complex', ros_sql.msg.TestComplex, tc),
