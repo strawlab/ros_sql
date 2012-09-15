@@ -16,10 +16,11 @@ def get_sql_table( metadata, topic_name ):
     return metadata.tables[table_name]
 
 def msg2sql(metadata, topic_name, msg, timestamp=None):
-    '''generate commands for saving topic'''
+    '''top-level call to generate commands for saving topic'''
     if timestamp is None:
         timestamp=rospy.Time.from_sec( time.time() )
-    kwargs, atts = msg2dict(metadata,topic_name,msg)
+    kwargs, atts, update_with_parent = msg2dict(metadata,topic_name,msg)
+
     kwargs[ROS_SQL_COLNAME_PREFIX+'_timestamp_secs']=timestamp.secs
     kwargs[ROS_SQL_COLNAME_PREFIX+'_timestamp_nsecs']=timestamp.nsecs
     for name,value in atts:
@@ -38,10 +39,38 @@ def msg2sql(metadata, topic_name, msg, timestamp=None):
         trans.rollback()
         raise
 
+    pk = result.inserted_primary_key
+    assert len(pk)==1
+    pk0 = pk[0]
+
+    for field_name in update_with_parent:
+        child_topic = topic_name + '.' + field_name
+        print 'child_topic',child_topic
+        child_info = get_table_info( metadata, topic_name=child_topic )
+        child_table = metadata.tables[child_info['table_name']]
+        child_pk_col = getattr( child_table.c, child_info['pk_name'] )
+
+        u = child_table.update().\
+            where( child_pk_col==sqlalchemy.sql.bindparam('child_id')).\
+            values( parent_id=sqlalchemy.sql.bindparam('parent_id'))
+
+        args = []
+        for child_id in update_with_parent[field_name]:
+            args.append( {'child_id':child_id, 'parent_id':pk0} )
+
+        trans = conn.begin()
+        try:
+            result = conn.execute( u, *args )
+            trans.commit()
+        except:
+            trans.rollback()
+            raise
+
 def get_table_info(metadata,topic_name=None,table_name=None):
     Session = sqlalchemy.orm.sessionmaker(bind=metadata.bind)
     session = Session()
     if topic_name is not None:
+        print '                   query for topic %r'%topic_name
         mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(topic_name=topic_name).one()
         if table_name is not None:
             assert mymeta.table_name == table_name
@@ -63,6 +92,8 @@ def get_table_info(metadata,topic_name=None,table_name=None):
                                    'child_table':backref.child_table,
                                    'child_field':backref.child_field,
                                    })
+    print 'mymeta.table_name: %r'%mymeta.table_name
+    print 'backref_info_list: %r'%backref_info_list
     return {'class':MsgClass,
             'top':mymeta.is_top,
             'pk_name':mymeta.pk_name,
@@ -110,6 +141,9 @@ def sql2msg(topic_name,result,metadata):
         results['timestamp'] = rospy.Time( top_secs, top_nsecs )
 
     my_pk = d.pop( info['pk_name'] )
+
+    if 'parent_id' in d:
+        d.pop( 'parent_id' )
 
     for key in d.keys():
         for fk in forwards.get(key,[]):
@@ -169,9 +203,11 @@ def sql2msg(topic_name,result,metadata):
         d[field] = my_val
 
     for backref in info['backref_info_list']:
+        print '  getting backref: %r'%backref
         backref_values = get_backref_values( backref['child_table'],
                                              backref['child_field'],
                                              my_pk, this_table, metadata )
+        print '  backref_values: %r'%backref_values
         d[ backref['parent_field'] ] = backref_values
 
     msg = MsgClass(**d)
@@ -184,13 +220,20 @@ def get_backref_values( table_name, field, parent_pk, parent_table, metadata ):
     new_table = metadata.tables[new_info['table_name']]
     new_topic = new_info['topic_name']
     foreign_key_column = getattr(new_table.c,field)
-    s = sqlalchemy.sql.select([new_table], foreign_key_column==parent_pk )
+    #s = sqlalchemy.sql.select([new_table], foreign_key_column==parent_pk )
+    s = sqlalchemy.sql.select([new_table])
+    print 'foreign_key_column: %r'%foreign_key_column
+    print 'parent_pk: %r'%parent_pk
+    print 'new_table: %r'%new_table
+    print 'new_topic: %r'%new_topic
+    print 'select: %r'%s
 
     conn = metadata.bind.connect()
     sa_result = conn.execute(s)
     msg_actual_sqls = sa_result.fetchall()
     result = []
-    for msq_actual_sql in msg_actual_sqls:
+    print 'msg_actual_sqls: %r'%msg_actual_sqls
+    for msg_actual_sql in msg_actual_sqls:
         print 'msg_actual_sql',msg_actual_sql
         print '*'*1000
         new_msg = sql2msg(new_topic, msg_actual_sql, metadata )['msg']
@@ -206,7 +249,9 @@ def insert_row( metadata, topic_name, name, value ):
     this_table = metadata.tables[table_name]
 
     if isinstance(value, roslib.message.Message ):
-        kwargs, atts = msg2dict( metadata, name2, value )
+        kwargs, atts, update_with_parent = msg2dict( metadata, name2, value )
+        if len(update_with_parent) > 0:
+            raise NotImplementedError
         kw2 = {}
         for k,row in atts:
             assert k not in kwargs # not already there
@@ -236,6 +281,7 @@ def insert_row( metadata, topic_name, name, value ):
 def msg2dict(metadata,topic_name,msg):
     result = {}
     atts = []
+    update_with_parent = {}
     for name,_type in zip(msg.__slots__, msg._slot_types):
         value = getattr(msg,name)
         if _type in type_map:
@@ -251,10 +297,10 @@ def msg2dict(metadata,topic_name,msg):
             for element in value:
                 row = insert_row( metadata, topic_name, name, element )
                 refs.append(row)
-            result[name] = refs
+            update_with_parent[name] = refs
         else:
             # compound type
             #result[name] = msg2dict( value )
             row = insert_row( metadata, topic_name, name, value )
             atts.append( (name, row) )
-    return result, atts
+    return result, atts, update_with_parent

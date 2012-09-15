@@ -261,6 +261,7 @@ def generate_schema_raw( metadata,
                                #sqlalchemy.ForeignKey(parent_pk_name,ondelete='cascade'),
                                sqlalchemy.ForeignKey(parent_table_name+'.'+parent_pk_name,ondelete='cascade'),
                                type_ = parent_pk_type,
+                               #nullable=False, # need to be able to insert as null
                                )
             )
 
@@ -326,9 +327,11 @@ def gen_schema( metadata, topic_name, msg_class):
                                                   )
             backref_rows.append( backref_row )
         new_meta_row = RosSqlMetadata(*args)
+        print 'inserting metadata',new_meta_row
         new_meta_row.timestamps = newts_rows
         new_meta_row.backrefs = backref_rows
         session.add(new_meta_row)
+    print
     session.commit()
 
 def add_schemas( metadata, list_of_topics_and_messages ):

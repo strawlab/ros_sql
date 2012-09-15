@@ -64,7 +64,7 @@ def test_simple_message_roundtrip():
         yield check_roundtrip, tn,mc,md
 
 def check_roundtrip( topic_name, msg_class, msg_expected ):
-    engine = sqlalchemy.create_engine('sqlite:///:memory:', echo=True)
+    engine = sqlalchemy.create_engine('sqlite:///:memory:')#, echo=True)
     metadata = sqlalchemy.MetaData(bind=engine)
     ros2sql.add_schemas(metadata,[(topic_name,msg_class)])
     metadata.create_all()
