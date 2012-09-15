@@ -96,12 +96,12 @@ def get_table_info(metadata,topic_name=None,table_name=None):
             mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(table_name=table_name).one()
             _table_info_table_cache[table_name] = mymeta
             _table_info_topic_cache[mymeta.topic_name] = mymeta
-    myts=session.query(ros2sql.RosSqlMetadataTimestamps).filter_by( main_id=mymeta.id ).all()
+    myts=session.query(ros2sql.RosSqlMetadataTimestamps).filter_by( main_table_name=mymeta.table_name ).all()
     MsgClass = ros2sql.get_msg_class(mymeta.msg_class_name)
     timestamp_columns = []
     for tsrow in myts:
         timestamp_columns.append(tsrow.column_base_name)
-    mybackrefs=session.query(ros2sql.RosSqlMetadataBackrefs).filter_by( main_id=mymeta.id ).all()
+    mybackrefs=session.query(ros2sql.RosSqlMetadataBackrefs).filter_by( main_table_name=mymeta.table_name ).all()
     backref_info_list = []
     for backref in mybackrefs:
         backref_info_list.append( {'parent_field':backref.parent_field,
