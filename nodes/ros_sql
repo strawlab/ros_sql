@@ -49,17 +49,19 @@ class Recorder:
             raise rostopic.ROSTopicIOException(
                 "Unable to communicate with master!")
 
-        list_of_topics_and_messages = []
         topic2msg_class = {}
         for topic in new_topics:
             if topic in self.subscribed_topics:
                 continue
             msg_class, _, _ = \
                        rostopic.get_topic_class(topic, blocking=True)
-            topic2msg_class[topic] = msg_class
-            list_of_topics_and_messages.append( (topic,msg_class) )
 
-        ros2sql.add_schemas(self.metadata,list_of_topics_and_messages)
+            try:
+                ros2sql.add_schemas(self.metadata,[(topic,msg_class)])
+            except ros2sql.MetadataChangedError, err:
+                rospy.logerr( str(err) )
+                continue
+            topic2msg_class[topic] = msg_class
 
         for topic in topic2msg_class:
             rospy.loginfo('subscribing to topic: %r'%topic)
