@@ -18,37 +18,56 @@ class Recorder:
         rospy.init_node('sql_recorder', anonymous=True)
 
         engine = sqlalchemy.create_engine(bind_url)
+        rospy.loginfo('saving to %r'%bind_url)
+
         self.metadata = sqlalchemy.MetaData(bind=engine)
 
-        if all:
-            assert len(topics)==0
-            master = rosgraph.masterapi.Master('/rostopic')
-            try:
-                state = master.getSystemState()
-                pubs, subs, _ = state
-                for t, l in pubs:
-                    topics.append(t)
-            except socket.error:
-                raise rostopic.ROSTopicIOException(
-                    "Unable to communicate with master!")
+        self.topics = topics
+        self.subscribed_topics = []
+        self.record_all = all
+
+        if self.record_all:
+            assert len(self.topics)==0
+
+        self.q = Queue.Queue()
+
+        self.check_master()
+        if self.record_all:
+            rospy.Timer(rospy.Duration(1.0), self.check_master)
+
+    def check_master(self,*args):
+        new_topics = []
+
+        master = rosgraph.masterapi.Master('/rostopic')
+        try:
+            state = master.getSystemState()
+            pubs, subs, _ = state
+            for t, l in pubs:
+                if self.record_all or t in self.topics:
+                    new_topics.append(t)
+        except socket.error:
+            raise rostopic.ROSTopicIOException(
+                "Unable to communicate with master!")
 
         list_of_topics_and_messages = []
         topic2msg_class = {}
-        for topic in topics:
+        for topic in new_topics:
+            if topic in self.subscribed_topics:
+                continue
             msg_class, _, _ = \
                        rostopic.get_topic_class(topic, blocking=True)
             topic2msg_class[topic] = msg_class
             list_of_topics_and_messages.append( (topic,msg_class) )
 
         ros2sql.add_schemas(self.metadata,list_of_topics_and_messages)
-        print 'saving to %r'%bind_url
-        print 'recording topics: ',' '.join(topics)
 
-        self.q = Queue.Queue()
         for topic in topic2msg_class:
+            rospy.loginfo('subscribing to topic: %r'%topic)
+
             msg_class = topic2msg_class[topic]
             rospy.Subscriber( topic, msg_class, callback=self.cb,
                               callback_args=topic)
+            self.subscribed_topics.append( topic )
 
     def cb(self, msg, topic):
         now = rospy.get_rostime()
