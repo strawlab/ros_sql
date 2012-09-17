@@ -16,6 +16,7 @@ import rospy
 import std_msgs
 
 ROS_SQL_COLNAME_PREFIX = '_ros_sql'
+SCHEMA_VERSION = 1
 
 Base = sqlalchemy.ext.declarative.declarative_base()
 
@@ -59,6 +60,7 @@ class RosSqlMetadata(Base):
     is_top = sqlalchemy.Column( sqlalchemy.types.Boolean, nullable=False )
     pk_name = sqlalchemy.Column( sqlalchemy.types.String, nullable=False )
     parent_id_name = sqlalchemy.Column( sqlalchemy.types.String )
+    ros_sql_schema_version = sqlalchemy.Column( sqlalchemy.types.Integer )
 
     timestamps = sqlalchemy.orm.relationship("RosSqlMetadataTimestamps",
                                              order_by="RosSqlMetadataTimestamps.id",
@@ -74,6 +76,7 @@ class RosSqlMetadata(Base):
         self.is_top = is_top
         self.pk_name = pk_name
         self.parent_id_name = parent_id_name
+        self.ros_sql_schema_version = SCHEMA_VERSION
 
     def __repr__(self):
         return "<RosSqlMetadata(%r,%r,%r,%r,%r,%r,%r)>"%(

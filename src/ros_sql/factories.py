@@ -96,6 +96,8 @@ def get_table_info(metadata,topic_name=None,table_name=None):
             mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(table_name=table_name).one()
             _table_info_table_cache[table_name] = mymeta
             _table_info_topic_cache[mymeta.topic_name] = mymeta
+
+    assert mymeta.ros_sql_schema_version == ros2sql.SCHEMA_VERSION
     myts=session.query(ros2sql.RosSqlMetadataTimestamps).filter_by( main_table_name=mymeta.table_name ).all()
     MsgClass = ros2sql.get_msg_class(mymeta.msg_class_name)
     timestamp_columns = []
