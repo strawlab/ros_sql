@@ -73,9 +73,13 @@ def msg2sql(metadata, topic_name, msg, timestamp=None):
 
 _table_info_topic_cache = {}
 _table_info_table_cache = {}
+_timestamp_info_cache = {}
+_backref_info_cache = {}
 def get_table_info(metadata,topic_name=None,table_name=None):
     global _table_info_topic_cache
     global _table_info_table_cache
+    global _timestamp_info_cache
+    global _backref_info_cache
 
     Session = sqlalchemy.orm.sessionmaker(bind=metadata.bind)
     session = Session()
@@ -98,12 +102,22 @@ def get_table_info(metadata,topic_name=None,table_name=None):
             _table_info_topic_cache[mymeta.topic_name] = mymeta
 
     assert mymeta.ros_sql_schema_version == ros2sql.SCHEMA_VERSION
-    myts=session.query(ros2sql.RosSqlMetadataTimestamps).filter_by( main_table_name=mymeta.table_name ).all()
+
+    try:
+        myts = _timestamp_info_cache[mymeta.table_name]
+    except KeyError:
+        myts=session.query(ros2sql.RosSqlMetadataTimestamps).filter_by( main_table_name=mymeta.table_name ).all()
+        _timestamp_info_cache[mymeta.table_name] = myts
+
     MsgClass = ros2sql.get_msg_class(mymeta.msg_class_name)
     timestamp_columns = []
     for tsrow in myts:
         timestamp_columns.append(tsrow.column_base_name)
-    mybackrefs=session.query(ros2sql.RosSqlMetadataBackrefs).filter_by( main_table_name=mymeta.table_name ).all()
+    try:
+        mybackrefs=_backref_info_cache[mymeta.table_name]
+    except KeyError:
+        mybackrefs=session.query(ros2sql.RosSqlMetadataBackrefs).filter_by( main_table_name=mymeta.table_name ).all()
+        _backref_info_cache[mymeta.table_name] = mybackrefs
     backref_info_list = []
     for backref in mybackrefs:
         backref_info_list.append( {'parent_field':backref.parent_field,
