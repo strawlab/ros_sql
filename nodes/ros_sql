@@ -56,12 +56,16 @@ class Recorder:
 
     def run(self):
         while not rospy.is_shutdown():
-            (now,msg,topic) = self.q.get()
-
-            factories.msg2sql(self.metadata,
-                              topic,
-                              msg,
-                              timestamp=now)
+            try:
+                # Block but timeout so we handle SIGINT (Ctrl-C).
+                (now,msg,topic) = self.q.get(block=True,timeout=0.1)
+            except Queue.Empty:
+                pass
+            else:
+                factories.msg2sql(self.metadata,
+                                  topic,
+                                  msg,
+                                  timestamp=now)
 
 def record(args):
     if args.all and len(args.topic):
