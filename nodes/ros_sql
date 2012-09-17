@@ -41,6 +41,8 @@ class Recorder:
             list_of_topics_and_messages.append( (topic,msg_class) )
 
         ros2sql.add_schemas(self.metadata,list_of_topics_and_messages)
+        print 'saving to %r'%bind_url
+        print 'recording topics: ',' '.join(topics)
 
         self.q = Queue.Queue()
         for topic in topic2msg_class:
