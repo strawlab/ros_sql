@@ -124,6 +124,13 @@ class RosSqlMetadata(Base):
                 self.parent_id_name         == other.parent_id_name         and
                 self.ros_sql_schema_version == other.ros_sql_schema_version )
 
+class MetadataChangedError(RuntimeError):
+    def __init__(self,old_meta_row, new_meta_row):
+        super(MetadataChangedError,self).__init__(
+            'metadata changed (original topic %r, new topic %r)'%
+            (old_meta_row.topic_name, new_meta_row.topic_name))
+        self.old_meta_row = old_meta_row
+        self.new_meta_row = new_meta_row
 
 def get_msg_class(msg_name):
     p1,p2 = msg_name.split('/')
@@ -349,7 +356,8 @@ def gen_schema( metadata, topic_name, msg_class):
             assert len(old_meta_rows)==1
             # XXX TODO: verify it is equivalent
             old_meta_row = old_meta_rows[0]
-            assert old_meta_row.is_equal(new_meta_row)
+            if not old_meta_row.is_equal(new_meta_row):
+                raise MetadataChangedError(old_meta_row, new_meta_row)
         else:
             # this metadata is not already present - add it
             session.add(new_meta_row)
