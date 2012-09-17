@@ -35,6 +35,10 @@ class RosSqlMetadataBackrefs(Base):
         self.child_table = child_table
         self.child_field = child_field
 
+    def __repr__(self):
+        return '<RosSqlMetadataBackrefs(%r,%r,%r)'%(
+            self.parent_field, self.child_table, self.child_field)
+
 class RosSqlMetadataTimestamps(Base):
     """keep track of names of Time fields"""
     __tablename__ = ROS_SQL_COLNAME_PREFIX + '_timestamp_metadata'
