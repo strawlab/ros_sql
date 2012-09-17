@@ -34,10 +34,13 @@ class RosSqlMetadataBackrefs(Base):
         self.parent_field = parent_field
         self.child_table = child_table
         self.child_field = child_field
-
     def __repr__(self):
         return '<RosSqlMetadataBackrefs(%r,%r,%r)'%(
             self.parent_field, self.child_table, self.child_field)
+    def is_equal(self,other):
+        return (self.parent_field == other.parent_field and
+                self.child_table  == other.child_table  and
+                self.child_field  == other.child_field)
 
 class RosSqlMetadataTimestamps(Base):
     """keep track of names of Time fields"""
@@ -54,6 +57,8 @@ class RosSqlMetadataTimestamps(Base):
         self.column_base_name = column_base_name
     def __repr__(self):
         return '<RosSqlMetadataTimestamps(%r)>'%(self.column_base_name)
+    def is_equal(self,other):
+        return (self.column_base_name == other.column_base_name)
 
 class RosSqlMetadata(Base):
     __tablename__ = ROS_SQL_COLNAME_PREFIX + '_metadata'
@@ -92,6 +97,33 @@ class RosSqlMetadata(Base):
             self.pk_name,
             self.parent_id_name,
             )
+
+    def is_equal(self,other):
+        # This could probably be renamed __eq__, but I don't know if sqlalchemy needs __eq__
+        def check_attr(self, other, attr):
+            self_list = getattr(self,attr)
+            other_list = getattr(other,attr)
+            if len(self_list) != len(other_list):
+                return False
+            # XXX This enforces order on the equality check. Do we need that?
+            for i,o in zip(self_list,other_list):
+                if not i.is_equal(o):
+                    return False
+            return True
+
+        still_equal = True
+        still_equal &= check_attr( self, other, 'timestamps')
+        still_equal &= check_attr( self, other, 'backrefs')
+        return (still_equal and
+                self.topic_name             == other.topic_name             and
+                self.table_name             == other.table_name             and
+                self.msg_class_name         == other.msg_class_name         and
+                self.msg_md5sum             == other.msg_md5sum             and
+                self.is_top                 == other.is_top                 and
+                self.pk_name                == other.pk_name                and
+                self.parent_id_name         == other.parent_id_name         and
+                self.ros_sql_schema_version == other.ros_sql_schema_version )
+
 
 def get_msg_class(msg_name):
     p1,p2 = msg_name.split('/')
@@ -310,7 +342,18 @@ def gen_schema( metadata, topic_name, msg_class):
         new_meta_row = RosSqlMetadata(*args)
         new_meta_row.timestamps = newts_rows
         new_meta_row.backrefs = backref_rows
-        session.add(new_meta_row)
+
+        # if equivalent is already in database, don't add
+        old_meta_rows=session.query(RosSqlMetadata).filter_by(topic_name=new_meta_row.topic_name).all()
+        if len(old_meta_rows):
+            assert len(old_meta_rows)==1
+            # XXX TODO: verify it is equivalent
+            old_meta_row = old_meta_rows[0]
+            assert old_meta_row.is_equal(new_meta_row)
+        else:
+            # this metadata is not already present - add it
+            session.add(new_meta_row)
+
     session.commit()
 
 def add_schemas( metadata, list_of_topics_and_messages ):
