@@ -14,8 +14,16 @@ import rostopic
 import rosgraph.masterapi
 
 class Recorder:
-    def __init__(self,topics,bind_url,all=False):
-        rospy.init_node('sql_recorder', anonymous=True)
+    def __init__(self,topics,bind_url_cli,all=False):
+        node_name_base = 'sql_recorder'
+        rospy.init_node(node_name_base, anonymous=True)
+
+        bind_url_default = 'sqlite:///:memory:'
+        bind_url = rospy.get_param(node_name_base+'/bind_url',bind_url_default)
+
+        # command-line overrides default and rosparam
+        if bind_url_cli is not None:
+            bind_url = bind_url_cli
 
         engine = sqlalchemy.create_engine(bind_url)
         rospy.loginfo('saving to %r'%bind_url)
@@ -108,7 +116,6 @@ def main():
     parser_record.add_argument('-a','--all',action='store_true',default=False,
                                help='record all topics')
     parser_record.add_argument('-b','--bind',type=str,
-                               default='sqlite:///ros.sqlite3',
                                help='sqlalchemy URL for database connection')
     parser_record.add_argument('topic', nargs='*',
                                help='topic name(s) to be recorded')
