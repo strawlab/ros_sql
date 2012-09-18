@@ -3,6 +3,7 @@ import sqlalchemy
 import roslib
 roslib.load_manifest('ros_sql')
 import ros_sql.msg
+import ros_sql.session
 import ros_sql.ros2sql as ros2sql
 import ros_sql.factories as factories
 
@@ -70,9 +71,10 @@ def test_simple_message_roundtrip():
 def check_roundtrip( topic_name, msg_class, msg_expected ):
     engine = sqlalchemy.create_engine('sqlite:///:memory:')#, echo=True)
     metadata = sqlalchemy.MetaData(bind=engine)
-    ros2sql.add_schemas(None,metadata,[(topic_name,msg_class)])
+    session = ros_sql.session.get_session(metadata)
+
+    ros2sql.add_schemas(session,metadata,[(topic_name,msg_class)])
     metadata.create_all()
-    session = None
 
     # send to SQL
     factories.msg2sql(session, metadata, topic_name, msg_expected)

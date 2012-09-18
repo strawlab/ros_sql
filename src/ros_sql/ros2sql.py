@@ -330,8 +330,6 @@ def gen_schema( session, metadata, topic_name, msg_class):
 
     # add table tracking row to MetaData instance
     Base.metadata.create_all( metadata.bind )
-    Session = sqlalchemy.orm.sessionmaker(bind=metadata.bind)
-    session = Session()
 
     for new_meta_row_args in rx['tracking_table_rows']:
         args = new_meta_row_args['row_args']

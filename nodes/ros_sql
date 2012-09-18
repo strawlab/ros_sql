@@ -8,6 +8,7 @@ import sqlalchemy
 import roslib
 roslib.load_manifest('ros_sql')
 import rospy
+import ros_sql.session
 import ros_sql.ros2sql as ros2sql
 import ros_sql.factories as factories
 import rostopic
@@ -29,7 +30,7 @@ class Recorder:
         rospy.loginfo('saving to %r'%bind_url)
 
         self.metadata = sqlalchemy.MetaData(bind=engine)
-        self.session = None
+        self.session = ros_sql.session.get_session(self.metadata)
 
         self.topics = topics
         self.subscribed_topics = []

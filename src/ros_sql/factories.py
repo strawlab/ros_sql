@@ -81,8 +81,6 @@ def get_table_info(session, metadata,topic_name=None,table_name=None):
     global _timestamp_info_cache
     global _backref_info_cache
 
-    Session = sqlalchemy.orm.sessionmaker(bind=metadata.bind)
-    session = Session()
     if topic_name is not None:
         try:
             mymeta = _table_info_topic_cache[topic_name]
