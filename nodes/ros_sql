@@ -29,6 +29,7 @@ class Recorder:
         rospy.loginfo('saving to %r'%bind_url)
 
         self.metadata = sqlalchemy.MetaData(bind=engine)
+        self.session = None
 
         self.topics = topics
         self.subscribed_topics = []
@@ -65,7 +66,7 @@ class Recorder:
                        rostopic.get_topic_class(topic, blocking=True)
 
             try:
-                ros2sql.add_schemas(self.metadata,[(topic,msg_class)])
+                ros2sql.add_schemas(self.session, self.metadata,[(topic,msg_class)])
             except ros2sql.MetadataChangedError, err:
                 rospy.logerr( str(err) )
                 continue
@@ -91,7 +92,7 @@ class Recorder:
             except Queue.Empty:
                 pass
             else:
-                factories.msg2sql(self.metadata,
+                factories.msg2sql(self.session, self.metadata,
                                   topic,
                                   msg,
                                   timestamp=now)

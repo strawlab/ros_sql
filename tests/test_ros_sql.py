@@ -70,14 +70,15 @@ def test_simple_message_roundtrip():
 def check_roundtrip( topic_name, msg_class, msg_expected ):
     engine = sqlalchemy.create_engine('sqlite:///:memory:')#, echo=True)
     metadata = sqlalchemy.MetaData(bind=engine)
-    ros2sql.add_schemas(metadata,[(topic_name,msg_class)])
+    ros2sql.add_schemas(None,metadata,[(topic_name,msg_class)])
     metadata.create_all()
+    session = None
 
     # send to SQL
-    factories.msg2sql(metadata, topic_name, msg_expected)
+    factories.msg2sql(session, metadata, topic_name, msg_expected)
 
     # get back from SQL
-    this_table = factories.get_sql_table(metadata, topic_name)
+    this_table = factories.get_sql_table(session, metadata, topic_name)
     s = sqlalchemy.sql.select([this_table])
 
     conn = metadata.bind.connect()
@@ -85,7 +86,7 @@ def check_roundtrip( topic_name, msg_class, msg_expected ):
     msg_actual_sql = sa_result.fetchone()
     sa_result.close()
 
-    result = factories.sql2msg( topic_name, msg_actual_sql, metadata ) # convert to ROS
+    result = factories.sql2msg( topic_name, msg_actual_sql, session, metadata ) # convert to ROS
 
     timestamp = result['timestamp']
     msg_actual = result['msg']

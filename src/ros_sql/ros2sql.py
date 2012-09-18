@@ -163,7 +163,7 @@ def slot_type_to_class_name(element_type):
         x = 'UInt' + x[4:]
     return x
 
-def parse_field( metadata, topic_name, _type, source_topic_name, field_name,
+def parse_field( session, metadata, topic_name, _type, source_topic_name, field_name,
                  parent_pk_name, parent_pk_type, parent_table_name ):
     """for a given element within a message, find the schema field type"""
     dt = type_map.get(_type,None)
@@ -197,7 +197,7 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name,
             msg_class = roslib.message.get_message_class(element_type_name)
             known_sql_type=None
 
-        rx = generate_schema_raw(metadata,
+        rx = generate_schema_raw(session, metadata,
                                  topic_name, msg_class, top=False,
                                  known_sql_type=known_sql_type,
                                  many_to_one=(parent_table_name,parent_pk_name,parent_pk_type),
@@ -217,7 +217,7 @@ def parse_field( metadata, topic_name, _type, source_topic_name, field_name,
     else:
         # _type is another message type
         msg_class = roslib.message.get_message_class(_type)
-        rx = generate_schema_raw(metadata,topic_name,msg_class, top=False)
+        rx = generate_schema_raw(session, metadata,topic_name,msg_class, top=False)
         tab_track_rows.extend( rx['tracking_table_rows'] )
         other_key_name = other_instance_name + '.' + rx['pk_name']
 
@@ -237,7 +237,7 @@ def add_time_cols(this_table, prefix):
     this_table.append_column(sqlalchemy.Column(
         prefix+'_nsecs', type_map['uint64'] ))
 
-def generate_schema_raw( metadata,
+def generate_schema_raw( session, metadata,
                          topic_name, msg_class, top=True,
                          many_to_one=None,
                          known_sql_type=None):
@@ -298,7 +298,7 @@ def generate_schema_raw( metadata,
                 add_time_cols( this_table, name )
                 timestamp_columns.append( name )
             else:
-                results = parse_field( metadata, topic_name+'.'+name, _type, topic_name, name, pk_name, pk_type, table_name )
+                results = parse_field( session, metadata, topic_name+'.'+name, _type, topic_name, name, pk_name, pk_type, table_name )
                 tracking_table_rows.extend( results['tab_track_rows'] )
 
                 if 'col_args' in results:
@@ -323,9 +323,9 @@ def generate_schema_raw( metadata,
         results['foreign_key_column_name']=foreign_key_column_name
     return results
 
-def gen_schema( metadata, topic_name, msg_class):
+def gen_schema( session, metadata, topic_name, msg_class):
     # add table(s) to MetaData instance
-    rx = generate_schema_raw(metadata,topic_name,msg_class, top=True)
+    rx = generate_schema_raw(session, metadata,topic_name,msg_class, top=True)
     metadata.create_all( metadata.bind )
 
     # add table tracking row to MetaData instance
@@ -364,6 +364,6 @@ def gen_schema( metadata, topic_name, msg_class):
 
     session.commit()
 
-def add_schemas( metadata, list_of_topics_and_messages ):
+def add_schemas( session, metadata, list_of_topics_and_messages ):
     for topic_name, msg_class in list_of_topics_and_messages:
-        gen_schema( metadata, topic_name, msg_class )
+        gen_schema( session, metadata, topic_name, msg_class )
