@@ -232,10 +232,12 @@ def parse_field( session, metadata, topic_name, _type, source_topic_name, field_
     return results
 
 def add_time_cols(this_table, prefix):
-    this_table.append_column(
-        sqlalchemy.Column( prefix+'_secs', type_map['uint64'] ))
-    this_table.append_column(sqlalchemy.Column(
-        prefix+'_nsecs', type_map['uint64'] ))
+    c1 = sqlalchemy.Column( prefix+'_secs',  type_map['uint64'] )
+    c2 = sqlalchemy.Column( prefix+'_nsecs', type_map['uint64'] )
+    this_table.append_column(c1)
+    this_table.append_column(c2)
+    ix = sqlalchemy.schema.Index( 'ix_'+this_table.name+prefix, c1, c2 )
+    return ix
 
 def generate_schema_raw( session, metadata,
                          topic_name, msg_class, top=True,
