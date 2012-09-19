@@ -247,7 +247,6 @@ def generate_schema_raw( session, metadata,
     backref_info_list = []
 
     table_name = namify( topic_name )
-    more_texts = []
 
     this_table = sqlalchemy.Table( table_name, metadata )
 
@@ -352,7 +351,6 @@ def gen_schema( session, metadata, topic_name, msg_class):
         old_meta_rows=session.query(RosSqlMetadata).filter_by(topic_name=new_meta_row.topic_name).all()
         if len(old_meta_rows):
             assert len(old_meta_rows)==1
-            # XXX TODO: verify it is equivalent
             old_meta_row = old_meta_rows[0]
             if not old_meta_row.is_equal(new_meta_row):
                 raise MetadataChangedError(old_meta_row, new_meta_row)
