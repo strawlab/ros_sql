@@ -16,6 +16,7 @@ import rospy
 import std_msgs
 
 ROS_SQL_COLNAME_PREFIX = '_ros_sql'
+ROS_TOP_TIMESTAMP_COLNAME_BASE = ROS_SQL_COLNAME_PREFIX+'_timestamp'
 SCHEMA_VERSION = 1
 
 Base = sqlalchemy.ext.declarative.declarative_base()
@@ -288,7 +289,7 @@ def generate_schema_raw( session, metadata,
                                ))
 
     if top:
-        add_time_cols( this_table, ROS_SQL_COLNAME_PREFIX+'_timestamp' )
+        add_time_cols( this_table, ROS_TOP_TIMESTAMP_COLNAME_BASE )
 
     if known_sql_type is not None:
         this_table.append_column(sqlalchemy.Column('data', known_sql_type))
