@@ -41,9 +41,15 @@ class Recorder:
 
         self.q = Queue.Queue()
 
+        self._do_check_master = False
+
         self.check_master()
         if self.record_all:
-            rospy.Timer(rospy.Duration(1.0), self.check_master)
+            rospy.Timer(rospy.Duration(1.0), self.do_check_master)
+
+    def do_check_master(self,*args):
+        # schedule a call to self.check_master() in the main thread
+        self._do_check_master = True
 
     def check_master(self,*args):
         new_topics = []
@@ -80,6 +86,7 @@ class Recorder:
             rospy.Subscriber( topic, msg_class, callback=self.cb,
                               callback_args=topic)
             self.subscribed_topics.append( topic )
+        self._do_check_master = False
 
     def cb(self, msg, topic):
         now = rospy.get_rostime()
@@ -97,6 +104,8 @@ class Recorder:
                                   topic,
                                   msg,
                                   timestamp=now)
+            if self._do_check_master:
+                self.check_master()
 
 def record(args):
     if args.all and len(args.topic):
