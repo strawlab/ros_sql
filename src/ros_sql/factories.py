@@ -44,6 +44,8 @@ def update_parents( session, metadata, update_with_parent, topic_name, pk0, conn
 
 def msg2sql(session, metadata, topic_name, msg, timestamp=None):
     '''top-level call to generate commands for saving topic'''
+    this_table = get_sql_table( session, metadata, topic_name )
+
     if timestamp is None:
         timestamp=rospy.Time.from_sec( time.time() )
     kwargs, atts, update_with_parent = msg2dict(session, metadata,topic_name,msg)
@@ -53,7 +55,6 @@ def msg2sql(session, metadata, topic_name, msg, timestamp=None):
     for name,value in atts:
         kwargs[name]=value
 
-    this_table = get_sql_table( session, metadata, topic_name )
     ins = this_table.insert()
 
     engine = metadata.bind
