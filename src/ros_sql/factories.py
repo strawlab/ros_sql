@@ -286,6 +286,12 @@ def msg2dict(session, metadata,topic_name,msg):
         value = getattr(msg,name)
         if _type in type_map:
             # simple type
+            if isinstance(value,unicode):
+                try:
+                    # try to convert to plain string if possible
+                    value = str(value)
+                except UnicodeEncodeError:
+                    pass
             result[name] = value
         elif _type=='time':
             # special case for time type
