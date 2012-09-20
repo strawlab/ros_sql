@@ -4,13 +4,13 @@ type_map = {
     'bool':
         s.Boolean(),
     'char':
-        s.String(length=1),
+        s.SmallInteger(unsigned=True),
     'int8':
         s.SmallInteger(),
     'uint8':
         s.SmallInteger(unsigned=True),
     'byte':
-        s.SmallInteger(unsigned=True),
+        s.SmallInteger(),
     'int16':
         s.Integer(),
     'uint16':
