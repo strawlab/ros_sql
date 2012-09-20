@@ -10,6 +10,7 @@ import rospy
 import ros_sql.ros2sql as ros2sql
 
 ROS_SQL_COLNAME_PREFIX = ros2sql.ROS_SQL_COLNAME_PREFIX
+ROS_TOP_TIMESTAMP_COLNAME_BASE = ros2sql.ROS_TOP_TIMESTAMP_COLNAME_BASE
 
 def get_sql_table( session, metadata, topic_name ):
     mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(topic_name=topic_name).one()
@@ -50,8 +51,8 @@ def msg2sql(session, metadata, topic_name, msg, timestamp=None):
         timestamp=rospy.Time.from_sec( time.time() )
     kwargs, atts, update_with_parent = msg2dict(session, metadata,topic_name,msg)
 
-    kwargs[ROS_SQL_COLNAME_PREFIX+'_timestamp_secs']=timestamp.secs
-    kwargs[ROS_SQL_COLNAME_PREFIX+'_timestamp_nsecs']=timestamp.nsecs
+    kwargs[ROS_TOP_TIMESTAMP_COLNAME_BASE+'_secs']=timestamp.secs
+    kwargs[ROS_TOP_TIMESTAMP_COLNAME_BASE+'_nsecs']=timestamp.nsecs
     for name,value in atts:
         kwargs[name]=value
 
@@ -150,8 +151,8 @@ def sql2msg(topic_name,result,session, metadata):
     results = {}
     if info['top']:
         # It is a top-level table.
-        top_secs = d.pop(ROS_SQL_COLNAME_PREFIX+'_timestamp_secs')
-        top_nsecs = d.pop(ROS_SQL_COLNAME_PREFIX+'_timestamp_nsecs')
+        top_secs = d.pop(ROS_TOP_TIMESTAMP_COLNAME_BASE+'_secs')
+        top_nsecs = d.pop(ROS_TOP_TIMESTAMP_COLNAME_BASE+'_nsecs')
         results['timestamp'] = rospy.Time( top_secs, top_nsecs )
 
     my_pk = d.pop( info['pk_name'] )

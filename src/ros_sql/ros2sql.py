@@ -268,8 +268,8 @@ def generate_schema_raw( session, metadata,
 
     assert pk_name not in msg_class.__slots__
     assert parent_id_name not in msg_class.__slots__
-    assert (ROS_SQL_COLNAME_PREFIX+'_timestamp_secs') not in msg_class.__slots__
-    assert (ROS_SQL_COLNAME_PREFIX+'_timestamp_nsecs') not in msg_class.__slots__
+    assert (ROS_TOP_TIMESTAMP_COLNAME_BASE+'_secs') not in msg_class.__slots__
+    assert (ROS_TOP_TIMESTAMP_COLNAME_BASE+'_nsecs') not in msg_class.__slots__
 
     pk_type = sqlalchemy.types.Integer
 
