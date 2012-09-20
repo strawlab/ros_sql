@@ -3,6 +3,8 @@ import StringIO
 
 import roslib
 roslib.load_manifest('ros_sql')
+import rospy
+
 import ros_sql.msg
 import ros_sql.session
 import ros_sql.ros2sql as ros2sql
@@ -12,7 +14,6 @@ import std_msgs.msg
 
 roslib.load_manifest('geometry_msgs')
 import geometry_msgs.msg
-import rospy
 
 class Bunch:
     def __init__(self, **kwds):
@@ -52,16 +53,16 @@ def test_simple_message_roundtrip():
 
     tc = ros_sql.msg.TestComplex()
     tc.pa = pa1
-    tc.string_array = map( std_msgs.msg.String, [ 'here', 'are', 'some', '\0complex', 'strings' ])
-    tc.uint8_array = map( std_msgs.msg.UInt8, [  0, 3, 254 ])
+    tc.string_array = [ 'here', 'are', 'some', '\0complex', 'strings' ]
+    tc.uint8_array = [  0, 3, 254 ]
     tc.header = header
 
     bma = std_msgs.msg.ByteMultiArray()
-    bma.data = [ std_msgs.msg.Byte(x) for x in [77, 33, 254] ]
+    bma.data = [77, 33, -127]
 
     for tn,mc,md in [('/test_string',std_msgs.msg.String, std_msgs.msg.String('xyz')),
                      ('/test_bool', std_msgs.msg.Bool, std_msgs.msg.Bool(True)),
-                     ('/test_char', std_msgs.msg.Char, std_msgs.msg.Char('a')),
+                     ('/test_char', std_msgs.msg.Char, std_msgs.msg.Char(254)),
                      ('/test_duration', std_msgs.msg.Duration, std_msgs.msg.Duration(rospy.Duration(1,2))),
                      ('/test_time', std_msgs.msg.Time, std_msgs.msg.Time(rospy.Time(1,2))),
                      ('/test_empty', std_msgs.msg.Empty, std_msgs.msg.Empty()),
