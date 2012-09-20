@@ -220,6 +220,12 @@ def sql2msg(topic_name,result,session, metadata):
                                              my_pk, this_table, session, metadata )
         d[ backref['parent_field'] ] = backref_values
 
+    for k in d:
+        if isinstance( d[k], unicode ):
+            try:
+                d[k]=str(d[k])
+            except UnicodeEncodeError:
+                pass
     msg = MsgClass(**d)
     results['msg'] = msg
     return results
