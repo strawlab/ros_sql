@@ -17,7 +17,7 @@ import std_msgs
 
 ROS_SQL_COLNAME_PREFIX = '_ros_sql'
 ROS_TOP_TIMESTAMP_COLNAME_BASE = ROS_SQL_COLNAME_PREFIX+'_timestamp'
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 Base = sqlalchemy.ext.declarative.declarative_base()
 
@@ -44,22 +44,25 @@ class RosSqlMetadataBackrefs(Base):
                 self.child_field  == other.child_field)
 
 class RosSqlMetadataTimestamps(Base):
-    """keep track of names of Time fields"""
+    """keep track of names of Time and Duration fields"""
     __tablename__ = ROS_SQL_COLNAME_PREFIX + '_timestamp_metadata'
     id =  sqlalchemy.Column(sqlalchemy.types.Integer, primary_key=True)
     column_base_name = sqlalchemy.Column( sqlalchemy.types.String,
                                           nullable=False )
+    is_duration = sqlalchemy.Column( sqlalchemy.types.Boolean, nullable=False )
 
     main_table_name = sqlalchemy.Column( sqlalchemy.types.String,
                                          sqlalchemy.ForeignKey(ROS_SQL_COLNAME_PREFIX + '_metadata.table_name' ),
                                          nullable=False)
 
-    def __init__(self, column_base_name):
+    def __init__(self, column_base_name, is_duration):
         self.column_base_name = column_base_name
+        self.is_duration = is_duration
     def __repr__(self):
-        return '<RosSqlMetadataTimestamps(%r)>'%(self.column_base_name)
+        return '<RosSqlMetadataTimestamps(%r,%r)>'%(self.column_base_name,self.is_duration)
     def is_equal(self,other):
-        return (self.column_base_name == other.column_base_name)
+        return (self.column_base_name == other.column_base_name and
+                self.is_duration      == other.is_duration)
 
 class RosSqlMetadata(Base):
     __tablename__ = ROS_SQL_COLNAME_PREFIX + '_metadata'
@@ -232,13 +235,16 @@ def parse_field( session, metadata, topic_name, _type, source_topic_name, field_
                    }
     return results
 
-def add_time_cols(this_table, prefix):
+def add_time_cols(this_table, prefix, duration=False):
     c1 = sqlalchemy.Column( prefix+'_secs',  type_map['uint64'] )
     c2 = sqlalchemy.Column( prefix+'_nsecs', type_map['uint64'] )
     this_table.append_column(c1)
     this_table.append_column(c2)
-    ix = sqlalchemy.schema.Index( 'ix_'+this_table.name+prefix, c1, c2 )
-    return ix
+    if not duration:
+        ix = sqlalchemy.schema.Index( 'ix_'+this_table.name+prefix, c1, c2 )
+        return ix
+    else:
+        return None
 
 def generate_schema_raw( session, metadata,
                          topic_name, msg_class, top=True,
@@ -298,7 +304,11 @@ def generate_schema_raw( session, metadata,
             if _type=='time':
                 # special type - doesn't map to 2 columns
                 add_time_cols( this_table, name )
-                timestamp_columns.append( name )
+                timestamp_columns.append( (name,False) )
+            elif _type=='duration':
+                # special type - doesn't map to 2 columns
+                add_time_cols( this_table, name, duration=True )
+                timestamp_columns.append( (name,True) )
             else:
                 results = parse_field( session, metadata, topic_name+'.'+name, _type, topic_name, name, pk_name, pk_type, table_name )
                 tracking_table_rows.extend( results['tab_track_rows'] )
@@ -337,8 +347,8 @@ def gen_schema( session, metadata, topic_name, msg_class):
         args = new_meta_row_args['row_args']
         newts_rows = []
         backref_rows = []
-        for ts_row in new_meta_row_args['timestamp_colnames']:
-            newts_row = RosSqlMetadataTimestamps(ts_row)
+        for ts_row,is_duration in new_meta_row_args['timestamp_colnames']:
+            newts_row = RosSqlMetadataTimestamps(ts_row,is_duration)
             newts_rows.append(newts_row)
         for bi in new_meta_row_args['backref_info_list']:
             backref_row = RosSqlMetadataBackrefs( bi['parent_field'],

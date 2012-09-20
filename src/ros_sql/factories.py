@@ -112,7 +112,7 @@ def get_table_info(session, metadata,topic_name=None,table_name=None):
     MsgClass = ros2sql.get_msg_class(mymeta.msg_class_name)
     timestamp_columns = []
     for tsrow in myts:
-        timestamp_columns.append(tsrow.column_base_name)
+        timestamp_columns.append((tsrow.column_base_name,tsrow.is_duration))
     try:
         mybackrefs=_backref_info_cache[mymeta.table_name]
     except KeyError:
@@ -205,10 +205,13 @@ def sql2msg(topic_name,result,session, metadata):
             assert name not in d
             d[name] = arr
 
-    for field in info['timestamp_columns']:
+    for field, is_duration in info['timestamp_columns']:
         my_secs =  d.pop(field+'_secs')
         my_nsecs = d.pop(field+'_nsecs')
-        my_val = rospy.Time( my_secs, my_nsecs )
+        if not is_duration:
+            my_val = rospy.Time( my_secs, my_nsecs )
+        else:
+            my_val = rospy.Duration( my_secs, my_nsecs )
         d[field] = my_val
 
     for backref in info['backref_info_list']:
@@ -296,6 +299,10 @@ def msg2dict(session, metadata,topic_name,msg):
             result[name] = value
         elif _type=='time':
             # special case for time type
+            result[name+'_secs'] = value.secs
+            result[name+'_nsecs'] = value.nsecs
+        elif _type=='duration':
+            # special case for duration type
             result[name+'_secs'] = value.secs
             result[name+'_nsecs'] = value.nsecs
         elif _type.endswith('[]'):
