@@ -249,6 +249,14 @@ def get_backref_values( table_name, field, parent_pk, parent_table, session, met
         new_msg = sql2msg(new_topic, msg_actual_sql, session, metadata )['msg']
         result.append(new_msg)
     sa_result.close()
+    if len(result):
+        # check if we need to strip down to bare data (removing ROS messages)
+        msg_class = new_msg.__class__
+        if (len(msg_class.__slots__)==1 and msg_class.__slots__[0]=='data'):
+            _type = msg_class._slot_types[0]
+            if type_map.has_key(_type):
+                # Collapse messages in array to raw Python type.
+                result = [ri.data for ri in result]
     return result
 
 def insert_row( session, metadata, topic_name, name, value ):
