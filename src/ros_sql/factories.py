@@ -12,8 +12,8 @@ import ros_sql.ros2sql as ros2sql
 ROS_SQL_COLNAME_PREFIX = ros2sql.ROS_SQL_COLNAME_PREFIX
 
 def get_sql_table( session, metadata, topic_name ):
-    table_name = ros2sql.namify( topic_name )
-    return metadata.tables[table_name]
+    mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(topic_name=topic_name).one()
+    return metadata.tables[mymeta.table_name]
 
 def update_parents( session, metadata, update_with_parent, topic_name, pk0, conn ):
     for field_name in update_with_parent:
