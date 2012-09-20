@@ -1,4 +1,5 @@
 import sqlalchemy
+import StringIO
 
 import roslib
 roslib.load_manifest('ros_sql')
@@ -90,9 +91,8 @@ def check_roundtrip( topic_name, msg_class, msg_expected, strict=True ):
 
     if strict:
         # ensure that ROS actually accepts these data
-        rospy.init_node('test_ros_sql')
-        pub = rospy.Publisher( topic_name, msg_class )
-        pub.publish( msg_expected )
+        buf = StringIO.StringIO()
+        msg_expected.serialize( buf )
 
     # send to SQL
     factories.msg2sql(session, metadata, topic_name, msg_expected)
