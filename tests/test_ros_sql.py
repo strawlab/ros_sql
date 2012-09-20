@@ -11,6 +11,7 @@ import std_msgs.msg
 
 roslib.load_manifest('geometry_msgs')
 import geometry_msgs.msg
+import rospy
 
 class Bunch:
     def __init__(self, **kwds):
@@ -68,13 +69,19 @@ def test_simple_message_roundtrip():
                      ]:
         yield check_roundtrip, tn,mc,md
 
-def check_roundtrip( topic_name, msg_class, msg_expected ):
+def check_roundtrip( topic_name, msg_class, msg_expected, strict=True ):
     engine = sqlalchemy.create_engine('sqlite:///:memory:')#, echo=True)
     metadata = sqlalchemy.MetaData(bind=engine)
     session = ros_sql.session.get_session(metadata)
 
     ros2sql.add_schemas(session,metadata,[(topic_name,msg_class)])
     metadata.create_all()
+
+    if strict:
+        # ensure that ROS actually accepts these data
+        rospy.init_node('test_ros_sql')
+        pub = rospy.Publisher( topic_name, msg_class )
+        pub.publish( msg_expected )
 
     # send to SQL
     factories.msg2sql(session, metadata, topic_name, msg_expected)
