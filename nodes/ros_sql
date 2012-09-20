@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 import argparse
-import StringIO
 import sys, time
 import Queue
 import sqlalchemy
+import numpy as np
 
 import roslib
 roslib.load_manifest('ros_sql')
@@ -117,6 +117,118 @@ def record(args):
     r = Recorder(args.topic,args.bind,all=args.all)
     r.run()
 
+class Player:
+    def __init__(self,bind_url_cli,loop=False):
+        node_name_base = 'sql_player'
+        rospy.init_node(node_name_base, anonymous=True)
+
+        bind_url_default = 'sqlite:///:memory:'
+        bind_url = rospy.get_param(node_name_base+'/bind_url',bind_url_default)
+
+        # command-line overrides default and rosparam
+        if bind_url_cli is not None:
+            bind_url = bind_url_cli
+
+        engine = sqlalchemy.create_engine(bind_url)#,echo=True)
+        rospy.loginfo('playing from %r'%bind_url)
+
+        self.metadata = sqlalchemy.MetaData(bind=engine)
+        self.metadata.reflect(engine)
+        self.session = ros_sql.session.get_session(self.metadata)
+
+        self.conn = self.metadata.bind.connect()
+
+        self.loop = loop
+
+        all_metadata = self.session.query( ros2sql.RosSqlMetadata).all()
+        self.meta=dict([(row.topic_name, row) for row in all_metadata if row.is_top])
+        func=factories.get_sql_table
+        self.tables = dict([ (t,func(self.session,self.metadata,t))
+                             for t in self.meta])
+        lt = np.max( [len(t) for t in self.meta])
+        s=[self._get_timestamps(self.tables[t],self.meta[t].pk_name,t,lt)
+           for t in self.meta]
+        timestamps = np.concatenate([i for i in s if i is not None])
+        self.timestamps = np.sort( timestamps )
+
+        self.pub = {}
+        for topic in self.meta:
+            msg_class_name = self.meta[topic].msg_class_name
+            MsgClass = ros2sql.get_msg_class(msg_class_name)
+            self.pub[topic] = rospy.Publisher( topic, MsgClass )
+
+    def _get_timestamps(self, tt, pk_name, topic, lt, sorted=False ):
+        t_secs  = ros2sql.ROS_TOP_TIMESTAMP_COLNAME_BASE+ '_secs'
+        t_nsecs = ros2sql.ROS_TOP_TIMESTAMP_COLNAME_BASE+'_nsecs'
+        if sorted:
+            c_secs = getattr( tt.c, t_secs)
+            c_nsecs = getattr( tt.c, t_nsecs)
+            s=sqlalchemy.sql.select([tt]).\
+               order_by( c_secs.asc(),c_nsecs.asc() )
+        else:
+            s=sqlalchemy.sql.select([tt])
+        sa_result = self.conn.execute(s)
+        result_sql = sa_result.fetchall()
+        sa_result.close()
+        if len(result_sql) == 0:
+            return None
+
+        # create numpy structured array of results
+        ts = []; keys = []
+        for row in result_sql:
+            ts.append(getattr(row,t_secs) + getattr(row,t_nsecs)*1e-9)
+            keys.append(getattr(row,pk_name))
+        ts = np.array(ts); keys = np.array(keys)
+        topics = np.array( [topic]*len(ts) )
+        dtype = [('timestamp',ts.dtype),
+                 ('key',keys.dtype),
+                 ('topic','S'+str(lt))]
+        results = np.empty( (len(ts),), dtype=dtype)
+        results['timestamp']=ts
+        results['key']=keys
+        results['topic']=topics
+        return results
+
+    def run(self):
+        while 1:
+            for idx, next_row_info in enumerate(self.timestamps):
+                topic = next_row_info['topic']
+                table = self.tables[ topic ]
+                meta = self.meta[ topic ]
+                pk_col = getattr(table.c,meta.pk_name)
+                key = next_row_info['key']
+                # convert from numpy to pure python
+                if np.issubdtype(key,str):
+                    key = str(key)
+                else:
+                    key = int(key)
+                s=sqlalchemy.sql.select([table]).\
+                   where(pk_col==key)
+                sa_result = self.conn.execute(s)
+                result_sql = sa_result.fetchone()
+                sa_result.close()
+
+                next_msg = factories.sql2msg( topic, result_sql, self.session, self.metadata )['msg']
+
+                now = time.time()
+                if idx==0:
+                    offset = now-next_row_info['timestamp']
+
+                scheduled_time = next_row_info['timestamp']+offset
+                while now < scheduled_time:
+                    wait_time = scheduled_time-now
+                    time.sleep( wait_time )
+                    now = time.time()
+
+                self.pub[topic].publish( next_msg )
+
+            if not self.loop:
+                break
+
+def play(args):
+    p = Player(args.bind,loop=args.loop)
+    p.run()
+
 def main():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(title='commands')
@@ -131,6 +243,16 @@ def main():
     parser_record.add_argument('topic', nargs='*',
                                help='topic name(s) to be recorded')
     parser_record.set_defaults(func=record)
+
+    # ------ play --------------
+    parser_play = subparsers.add_parser('play',
+                                        help='play SQL to ROS')
+    parser_play.add_argument('-b','--bind',type=str,
+                               help='sqlalchemy URL for database connection')
+    parser_play.add_argument('-l','--loop',action='store_true',
+                               help='loop playback')
+    parser_play.set_defaults(func=play)
+
     # ----------------------------
 
     # use argparse, but only after ROS did its thing
