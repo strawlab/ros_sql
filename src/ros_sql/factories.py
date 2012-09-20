@@ -13,10 +13,12 @@ ROS_SQL_COLNAME_PREFIX = ros2sql.ROS_SQL_COLNAME_PREFIX
 ROS_TOP_TIMESTAMP_COLNAME_BASE = ros2sql.ROS_TOP_TIMESTAMP_COLNAME_BASE
 
 def get_sql_table( session, metadata, topic_name ):
+    """helper function to get table for a given topic name (read and write db)"""
     mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(topic_name=topic_name).one()
     return metadata.tables[mymeta.table_name]
 
 def update_parents( session, metadata, update_with_parent, topic_name, pk0, conn ):
+    """helper function for tables containing items in a another table's list (write db)"""
     for field_name in update_with_parent:
         child_topic = topic_name + '.' + field_name
         child_info = get_table_info( session, metadata, topic_name=child_topic )
@@ -44,7 +46,7 @@ def update_parents( session, metadata, update_with_parent, topic_name, pk0, conn
 
 
 def msg2sql(session, metadata, topic_name, msg, timestamp=None):
-    '''top-level call to generate commands for saving topic'''
+    """top-level call to execute commands for saving a message (write db)"""
     this_table = get_sql_table( session, metadata, topic_name )
 
     if timestamp is None:
@@ -78,6 +80,7 @@ _table_info_table_cache = {}
 _timestamp_info_cache = {}
 _backref_info_cache = {}
 def get_table_info(session, metadata,topic_name=None,table_name=None):
+    """helper function to get table information (read and write db)"""
     global _table_info_topic_cache
     global _table_info_table_cache
     global _timestamp_info_cache
@@ -135,7 +138,7 @@ def get_table_info(session, metadata,topic_name=None,table_name=None):
             }
 
 def sql2msg(topic_name,result,session, metadata):
-    '''convert query result into message'''
+    """convert query result into message (read db)"""
     info = get_table_info( session, metadata, topic_name=topic_name)
     MsgClass = info['class']
     table_name = info['table_name']
@@ -231,7 +234,7 @@ def sql2msg(topic_name,result,session, metadata):
     return results
 
 def get_backref_values( table_name, field, parent_pk, parent_table, session, metadata ):
-
+    """helper function to fill list (read db)"""
     new_info = get_table_info(session, metadata, table_name=table_name)
     new_table = metadata.tables[new_info['table_name']]
     new_topic = new_info['topic_name']
@@ -249,6 +252,7 @@ def get_backref_values( table_name, field, parent_pk, parent_table, session, met
     return result
 
 def insert_row( session, metadata, topic_name, name, value ):
+    """helper function to insert data (write db)"""
     name2 = topic_name + '.' + name
     info = get_table_info( session, metadata, topic_name=name2)
 
@@ -289,6 +293,7 @@ def insert_row( session, metadata, topic_name, name, value ):
     return pk0
 
 def msg2dict(session, metadata,topic_name,msg):
+    """helper function to convert ROS message to dict (write db)"""
     result = {}
     atts = []
     update_with_parent = {}
