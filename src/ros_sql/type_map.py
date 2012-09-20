@@ -1,6 +1,10 @@
 import sqlalchemy.types as s
 
 type_map = {
+    'bool':
+        s.Boolean(),
+    'char':
+        s.String(length=1),
     'int8':
         s.SmallInteger(),
     'uint8':
