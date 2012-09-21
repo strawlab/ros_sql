@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import sys
 import re
-import importlib
 
 import sqlalchemy
 import sqlalchemy.types
@@ -10,12 +9,12 @@ from type_map import type_map
 
 import roslib
 roslib.load_manifest('ros_sql')
-import rosmsg
 import rospy
 import std_msgs
 from ros_sql.models import ROS_SQL_COLNAME_PREFIX, \
      ROS_TOP_TIMESTAMP_COLNAME_BASE, Base, \
      RosSqlMetadata, RosSqlMetadataBackrefs, RosSqlMetadataTimestamps
+import ros_sql.util as util
 
 class MetadataChangedError(RuntimeError):
     def __init__(self,old_meta_row, new_meta_row):
@@ -24,37 +23,6 @@ class MetadataChangedError(RuntimeError):
             (old_meta_row.topic_name, new_meta_row.topic_name))
         self.old_meta_row = old_meta_row
         self.new_meta_row = new_meta_row
-
-def get_msg_class(msg_name):
-    p1,p2 = msg_name.split('/')
-    module_name = p1+'.msg'
-    class_name = p2
-    module = importlib.import_module(module_name)
-    klass = getattr(module,class_name)
-    return klass
-
-def capitalize(name):
-    "name_with_parts -> NameWithParts"
-    parts = name.split('_')
-    parts = [p.capitalize() for p in parts]
-    return ''.join(parts)
-
-def namify( topic_name ):
-    if topic_name.startswith('/'):
-        topic_name = topic_name[1:]
-    if '/' in topic_name:
-        raise NotImplementedError
-
-    topic_name = topic_name.replace('.','_')
-
-    return topic_name.lower()
-
-def slot_type_to_class_name(element_type):
-    # This is (obviously) a hack, but how to do it right?
-    x = element_type.capitalize()
-    if x.startswith('Uint'):
-        x = 'UInt' + x[4:]
-    return x
 
 def parse_field( session, metadata, topic_name, _type, source_topic_name, field_name,
                  parent_pk_name, parent_pk_type, parent_table_name ):
@@ -72,7 +40,7 @@ def parse_field( session, metadata, topic_name, _type, source_topic_name, field_
                    }
         return results
 
-    other_instance_name = namify( topic_name )
+    other_instance_name = util.namify( topic_name )
 
     if _type.endswith('[]'):
         # array - need to start another sql table
@@ -82,7 +50,7 @@ def parse_field( session, metadata, topic_name, _type, source_topic_name, field_
 
         if dt is not None:
             # array of fundamental type
-            element_class_name = slot_type_to_class_name(element_type_name)
+            element_class_name = util.slot_type_to_class_name(element_type_name)
             msg_class = getattr(std_msgs.msg,element_class_name)
             known_sql_type=dt
         else:
@@ -124,29 +92,6 @@ def parse_field( session, metadata, topic_name, _type, source_topic_name, field_
                    }
     return results
 
-def time_cols_to_ros( time_secs, time_nsecs, is_duration=False ):
-    time_secs2 = int(time_secs)
-    time_nsecs2 = int(time_nsecs)
-    if time_secs2 != time_secs:
-        raise ValueError('time value (%r) cannot be represented as integer.'%time_secs)
-    if time_nsecs2 != time_nsecs:
-        raise ValueError('time value (%r) cannot be represented as integer.'%time_nsecs)
-    if not is_duration:
-        return rospy.Time( time_secs2, time_nsecs2 )
-    else:
-        return rospy.Duration( time_secs2, time_nsecs2 )
-
-def add_time_cols(this_table, prefix, duration=False):
-    c1 = sqlalchemy.Column( prefix+'_secs',  type_map['uint64'] )
-    c2 = sqlalchemy.Column( prefix+'_nsecs', type_map['uint64'] )
-    this_table.append_column(c1)
-    this_table.append_column(c2)
-    if not duration:
-        ix = sqlalchemy.schema.Index( 'ix_'+this_table.name+prefix, c1, c2 )
-        return ix
-    else:
-        return None
-
 def generate_schema_raw( session, metadata,
                          topic_name, msg_class, top=True,
                          many_to_one=None,
@@ -156,7 +101,7 @@ def generate_schema_raw( session, metadata,
     timestamp_columns = []
     backref_info_list = []
 
-    table_name = namify( topic_name )
+    table_name = util.namify( topic_name )
 
     this_table = sqlalchemy.Table( table_name, metadata )
 
@@ -196,7 +141,7 @@ def generate_schema_raw( session, metadata,
                                ))
 
     if top:
-        add_time_cols( this_table, ROS_TOP_TIMESTAMP_COLNAME_BASE )
+        util.add_time_cols( this_table, ROS_TOP_TIMESTAMP_COLNAME_BASE )
 
     if known_sql_type is not None:
         this_table.append_column(sqlalchemy.Column('data', known_sql_type))
@@ -204,11 +149,11 @@ def generate_schema_raw( session, metadata,
         for name, _type in zip(msg_class.__slots__, msg_class._slot_types):
             if _type=='time':
                 # special type - doesn't map to 2 columns
-                add_time_cols( this_table, name )
+                util.add_time_cols( this_table, name )
                 timestamp_columns.append( (name,False) )
             elif _type=='duration':
                 # special type - doesn't map to 2 columns
-                add_time_cols( this_table, name, duration=True )
+                util.add_time_cols( this_table, name, duration=True )
                 timestamp_columns.append( (name,True) )
             else:
                 results = parse_field( session, metadata, topic_name+'.'+name, _type, topic_name, name, pk_name, pk_type, table_name )

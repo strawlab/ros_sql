@@ -12,6 +12,7 @@ import ros_sql.session
 import ros_sql.models as models
 import ros_sql.ros2sql as ros2sql
 import ros_sql.factories as factories
+import ros_sql.util as util
 import rostopic
 import rosgraph.masterapi
 
@@ -155,7 +156,7 @@ class Player:
         self.pub = {}
         for topic in self.meta:
             msg_class_name = self.meta[topic].msg_class_name
-            MsgClass = ros2sql.get_msg_class(msg_class_name)
+            MsgClass = util.get_msg_class(msg_class_name)
             self.pub[topic] = rospy.Publisher( topic, MsgClass )
 
     def _get_timestamps(self, tt, pk_name, topic, lt, sorted=False ):
