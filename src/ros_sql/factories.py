@@ -109,7 +109,7 @@ def get_table_info(session, metadata,topic_name=None,table_name=None):
     try:
         myts = _timestamp_info_cache[mymeta.table_name]
     except KeyError:
-        myts=session.query(ros2sql.RosSqlMetadataTimestamps).filter_by( main_table_name=mymeta.table_name ).all()
+        myts=session.query(ros2sql.RosSqlMetadataTimestamps).filter_by( main_id=mymeta.id ).all()
         _timestamp_info_cache[mymeta.table_name] = myts
 
     MsgClass = ros2sql.get_msg_class(mymeta.msg_class_name)
@@ -119,7 +119,7 @@ def get_table_info(session, metadata,topic_name=None,table_name=None):
     try:
         mybackrefs=_backref_info_cache[mymeta.table_name]
     except KeyError:
-        mybackrefs=session.query(ros2sql.RosSqlMetadataBackrefs).filter_by( main_table_name=mymeta.table_name ).all()
+        mybackrefs=session.query(ros2sql.RosSqlMetadataBackrefs).filter_by( main_id=mymeta.id ).all()
         _backref_info_cache[mymeta.table_name] = mybackrefs
     backref_info_list = []
     for backref in mybackrefs:
@@ -156,10 +156,9 @@ def sql2msg(topic_name,result,session, metadata):
         # It is a top-level table.
         top_secs = d.pop(ROS_TOP_TIMESTAMP_COLNAME_BASE+'_secs')
         top_nsecs = d.pop(ROS_TOP_TIMESTAMP_COLNAME_BASE+'_nsecs')
-        results['timestamp'] = rospy.Time( top_secs, top_nsecs )
+        results['timestamp'] = ros2sql.time_cols_to_ros( top_secs, top_nsecs )
 
     my_pk = d.pop( info['pk_name'] )
-
 
     parent_id_name = info['parent_id_name']
     if parent_id_name in d:
@@ -211,11 +210,8 @@ def sql2msg(topic_name,result,session, metadata):
     for field, is_duration in info['timestamp_columns']:
         my_secs =  d.pop(field+'_secs')
         my_nsecs = d.pop(field+'_nsecs')
-        if not is_duration:
-            my_val = rospy.Time( my_secs, my_nsecs )
-        else:
-            my_val = rospy.Duration( my_secs, my_nsecs )
-        d[field] = my_val
+        d[field] = ros2sql.time_cols_to_ros( my_secs, my_nsecs,
+                                             is_duration=is_duration)
 
     for backref in info['backref_info_list']:
         backref_values = get_backref_values( backref['child_table'],

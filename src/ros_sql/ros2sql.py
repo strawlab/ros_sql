@@ -28,9 +28,9 @@ class RosSqlMetadataBackrefs(Base):
     child_table = sqlalchemy.Column( sqlalchemy.types.String, nullable=False)
     child_field = sqlalchemy.Column( sqlalchemy.types.String, nullable=False)
 
-    main_table_name = sqlalchemy.Column( sqlalchemy.types.String,
-                                         sqlalchemy.ForeignKey(ROS_SQL_COLNAME_PREFIX + '_metadata.table_name' ),
-                                         nullable=False)
+    main_id = sqlalchemy.Column( sqlalchemy.types.Integer,
+                                 sqlalchemy.ForeignKey(ROS_SQL_COLNAME_PREFIX + '_metadata.id' ))
+                                 #nullable=False)
     def __init__(self, parent_field, child_table, child_field):
         self.parent_field = parent_field
         self.child_table = child_table
@@ -51,9 +51,9 @@ class RosSqlMetadataTimestamps(Base):
                                           nullable=False )
     is_duration = sqlalchemy.Column( sqlalchemy.types.Boolean, nullable=False )
 
-    main_table_name = sqlalchemy.Column( sqlalchemy.types.String,
-                                         sqlalchemy.ForeignKey(ROS_SQL_COLNAME_PREFIX + '_metadata.table_name' ),
-                                         nullable=False)
+    main_id = sqlalchemy.Column( sqlalchemy.types.Integer,
+                                 sqlalchemy.ForeignKey(ROS_SQL_COLNAME_PREFIX + '_metadata.id' ))
+                                 #nullable=False)
 
     def __init__(self, column_base_name, is_duration):
         self.column_base_name = column_base_name
@@ -66,8 +66,9 @@ class RosSqlMetadataTimestamps(Base):
 
 class RosSqlMetadata(Base):
     __tablename__ = ROS_SQL_COLNAME_PREFIX + '_metadata'
-    topic_name = sqlalchemy.Column( sqlalchemy.types.String, primary_key=True)
-    table_name = sqlalchemy.Column( sqlalchemy.types.String, primary_key=True)
+    id = sqlalchemy.Column( sqlalchemy.types.Integer, primary_key=True)
+    topic_name = sqlalchemy.Column( sqlalchemy.types.String)
+    table_name = sqlalchemy.Column( sqlalchemy.types.String)
     msg_class_name = sqlalchemy.Column( sqlalchemy.types.String, nullable=False )
     msg_md5sum = sqlalchemy.Column( sqlalchemy.types.String, nullable=False )
     is_top = sqlalchemy.Column( sqlalchemy.types.Boolean, nullable=False )
@@ -234,6 +235,18 @@ def parse_field( session, metadata, topic_name, _type, source_topic_name, field_
             'backref_info_list':[],
                    }
     return results
+
+def time_cols_to_ros( time_secs, time_nsecs, is_duration=False ):
+    time_secs2 = int(time_secs)
+    time_nsecs2 = int(time_nsecs)
+    if time_secs2 != time_secs:
+        raise ValueError('time value (%r) cannot be represented as integer.'%time_secs)
+    if time_nsecs2 != time_nsecs:
+        raise ValueError('time value (%r) cannot be represented as integer.'%time_nsecs)
+    if not is_duration:
+        return rospy.Time( time_secs2, time_nsecs2 )
+    else:
+        return rospy.Duration( time_secs2, time_nsecs2 )
 
 def add_time_cols(this_table, prefix, duration=False):
     c1 = sqlalchemy.Column( prefix+'_secs',  type_map['uint64'] )
