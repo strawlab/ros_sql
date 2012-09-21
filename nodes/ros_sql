@@ -9,6 +9,7 @@ import roslib
 roslib.load_manifest('ros_sql')
 import rospy
 import ros_sql.session
+import ros_sql.models as models
 import ros_sql.ros2sql as ros2sql
 import ros_sql.factories as factories
 import rostopic
@@ -140,7 +141,7 @@ class Player:
 
         self.loop = loop
 
-        all_metadata = self.session.query( ros2sql.RosSqlMetadata).all()
+        all_metadata = self.session.query( models.RosSqlMetadata).all()
         self.meta=dict([(row.topic_name, row) for row in all_metadata if row.is_top])
         func=factories.get_sql_table
         self.tables = dict([ (t,func(self.session,self.metadata,t))
@@ -158,8 +159,8 @@ class Player:
             self.pub[topic] = rospy.Publisher( topic, MsgClass )
 
     def _get_timestamps(self, tt, pk_name, topic, lt, sorted=False ):
-        t_secs  = ros2sql.ROS_TOP_TIMESTAMP_COLNAME_BASE+ '_secs'
-        t_nsecs = ros2sql.ROS_TOP_TIMESTAMP_COLNAME_BASE+'_nsecs'
+        t_secs  = models.ROS_TOP_TIMESTAMP_COLNAME_BASE+ '_secs'
+        t_nsecs = models.ROS_TOP_TIMESTAMP_COLNAME_BASE+'_nsecs'
         if sorted:
             c_secs = getattr( tt.c, t_secs)
             c_nsecs = getattr( tt.c, t_nsecs)

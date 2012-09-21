@@ -8,13 +8,14 @@ import roslib.message
 roslib.load_manifest('ros_sql')
 import rospy
 import ros_sql.ros2sql as ros2sql
+import ros_sql.models as models
 
-ROS_SQL_COLNAME_PREFIX = ros2sql.ROS_SQL_COLNAME_PREFIX
-ROS_TOP_TIMESTAMP_COLNAME_BASE = ros2sql.ROS_TOP_TIMESTAMP_COLNAME_BASE
+ROS_SQL_COLNAME_PREFIX = models.ROS_SQL_COLNAME_PREFIX
+ROS_TOP_TIMESTAMP_COLNAME_BASE = models.ROS_TOP_TIMESTAMP_COLNAME_BASE
 
 def get_sql_table( session, metadata, topic_name ):
     """helper function to get table for a given topic name (read and write db)"""
-    mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(topic_name=topic_name).one()
+    mymeta=session.query(models.RosSqlMetadata).filter_by(topic_name=topic_name).one()
     return metadata.tables[mymeta.table_name]
 
 def update_parents( session, metadata, update_with_parent, topic_name, pk0, conn ):
@@ -90,7 +91,7 @@ def get_table_info(session, metadata,topic_name=None,table_name=None):
         try:
             mymeta = _table_info_topic_cache[topic_name]
         except KeyError:
-            mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(topic_name=topic_name).one()
+            mymeta=session.query(models.RosSqlMetadata).filter_by(topic_name=topic_name).one()
             _table_info_topic_cache[topic_name] = mymeta
             _table_info_table_cache[mymeta.table_name] = mymeta
         if table_name is not None:
@@ -100,16 +101,16 @@ def get_table_info(session, metadata,topic_name=None,table_name=None):
         try:
             mymeta = _table_info_table_cache[table_name]
         except KeyError:
-            mymeta=session.query(ros2sql.RosSqlMetadata).filter_by(table_name=table_name).one()
+            mymeta=session.query(models.RosSqlMetadata).filter_by(table_name=table_name).one()
             _table_info_table_cache[table_name] = mymeta
             _table_info_topic_cache[mymeta.topic_name] = mymeta
 
-    assert mymeta.ros_sql_schema_version == ros2sql.SCHEMA_VERSION
+    assert mymeta.ros_sql_schema_version == models.SCHEMA_VERSION
 
     try:
         myts = _timestamp_info_cache[mymeta.table_name]
     except KeyError:
-        myts=session.query(ros2sql.RosSqlMetadataTimestamps).filter_by( main_id=mymeta.id ).all()
+        myts=session.query(models.RosSqlMetadataTimestamps).filter_by( main_id=mymeta.id ).all()
         _timestamp_info_cache[mymeta.table_name] = myts
 
     MsgClass = ros2sql.get_msg_class(mymeta.msg_class_name)
@@ -119,7 +120,7 @@ def get_table_info(session, metadata,topic_name=None,table_name=None):
     try:
         mybackrefs=_backref_info_cache[mymeta.table_name]
     except KeyError:
-        mybackrefs=session.query(ros2sql.RosSqlMetadataBackrefs).filter_by( main_id=mymeta.id ).all()
+        mybackrefs=session.query(models.RosSqlMetadataBackrefs).filter_by( main_id=mymeta.id ).all()
         _backref_info_cache[mymeta.table_name] = mybackrefs
     backref_info_list = []
     for backref in mybackrefs:
