@@ -40,7 +40,7 @@ Do you also reflect database contents to Python classes?
 The database contents are reflected back and forth from ROS
 messages. No other representation is supported.
 
-That said, it would be fairly simple to use sqlalchemy to reflect the
+That said, it is straightforward to use sqlalchemy to reflect the
 database into Python objects. This could facilitate querying the
 database and perhaps some examples doing this will be added in the
 future.
