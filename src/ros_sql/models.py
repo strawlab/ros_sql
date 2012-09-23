@@ -4,20 +4,20 @@ import sqlalchemy.types
 
 ROS_SQL_COLNAME_PREFIX = '_ros_sql'
 ROS_TOP_TIMESTAMP_COLNAME_BASE = ROS_SQL_COLNAME_PREFIX+'_timestamp'
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 Base = sqlalchemy.ext.declarative.declarative_base()
 
 class RosSqlMetadata(Base):
     __tablename__ = ROS_SQL_COLNAME_PREFIX + '_metadata'
     id = sqlalchemy.Column( sqlalchemy.types.Integer, primary_key=True)
-    topic_name = sqlalchemy.Column( sqlalchemy.types.String)
-    table_name = sqlalchemy.Column( sqlalchemy.types.String)
-    msg_class_name = sqlalchemy.Column( sqlalchemy.types.String, nullable=False )
-    msg_md5sum = sqlalchemy.Column( sqlalchemy.types.String, nullable=False )
+    topic_name = sqlalchemy.Column( sqlalchemy.types.Text)
+    table_name = sqlalchemy.Column( sqlalchemy.types.Text)
+    msg_class_name = sqlalchemy.Column( sqlalchemy.types.Text, nullable=False )
+    msg_md5sum = sqlalchemy.Column( sqlalchemy.types.Text, nullable=False )
     is_top = sqlalchemy.Column( sqlalchemy.types.Boolean, nullable=False )
-    pk_name = sqlalchemy.Column( sqlalchemy.types.String, nullable=False )
-    parent_id_name = sqlalchemy.Column( sqlalchemy.types.String )
+    pk_name = sqlalchemy.Column( sqlalchemy.types.Text, nullable=False )
+    parent_id_name = sqlalchemy.Column( sqlalchemy.types.Text )
     ros_sql_schema_version = sqlalchemy.Column( sqlalchemy.types.Integer )
 
     timestamps = sqlalchemy.orm.relationship("RosSqlMetadataTimestamps",
@@ -76,9 +76,9 @@ class RosSqlMetadata(Base):
 class RosSqlMetadataBackrefs(Base):
     __tablename__ = ROS_SQL_COLNAME_PREFIX + '_backref_metadata'
     id =  sqlalchemy.Column(sqlalchemy.types.Integer, primary_key=True)
-    parent_field = sqlalchemy.Column( sqlalchemy.types.String, nullable=False)
-    child_table = sqlalchemy.Column( sqlalchemy.types.String, nullable=False)
-    child_field = sqlalchemy.Column( sqlalchemy.types.String, nullable=False)
+    parent_field = sqlalchemy.Column( sqlalchemy.types.Text, nullable=False)
+    child_table = sqlalchemy.Column( sqlalchemy.types.Text, nullable=False)
+    child_field = sqlalchemy.Column( sqlalchemy.types.Text, nullable=False)
 
     main_id = sqlalchemy.Column( sqlalchemy.types.Integer,
                                  sqlalchemy.ForeignKey(ROS_SQL_COLNAME_PREFIX + '_metadata.id' ))
@@ -99,7 +99,7 @@ class RosSqlMetadataTimestamps(Base):
     """keep track of names of Time and Duration fields"""
     __tablename__ = ROS_SQL_COLNAME_PREFIX + '_timestamp_metadata'
     id =  sqlalchemy.Column(sqlalchemy.types.Integer, primary_key=True)
-    column_base_name = sqlalchemy.Column( sqlalchemy.types.String,
+    column_base_name = sqlalchemy.Column( sqlalchemy.types.Text,
                                           nullable=False )
     is_duration = sqlalchemy.Column( sqlalchemy.types.Boolean, nullable=False )
 

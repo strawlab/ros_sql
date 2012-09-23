@@ -1,4 +1,5 @@
 import sqlalchemy.types as s
+import ros_sql.models as models
 
 type_map = {
     'bool':
@@ -28,5 +29,5 @@ type_map = {
     'float64':
         s.Float(precision=64),
     'string':
-        s.String(),
+        s.Text(),
     }
