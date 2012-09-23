@@ -19,6 +19,18 @@ class Bunch:
     def __init__(self, **kwds):
         self.__dict__.update(kwds)
 
+_args = {}
+def set_args(*args):
+    global _args
+    key = args[0]
+    if key in _args:
+        raise ValueError('%r already in _args'%key)
+    _args[key] = args[1:]
+
+def get_args(key):
+    global _args
+    return _args[key]
+
 def test_simple_message_roundtrip():
     pose1 = geometry_msgs.msg.Pose()
     pose1.position.x = 1
@@ -81,9 +93,12 @@ def test_simple_message_roundtrip():
                      ('/test_pose_array', geometry_msgs.msg.PoseArray, pa1),
                      ('/test_complex', ros_sql.msg.TestComplex, tc),
                      ]:
-        yield check_roundtrip, tn,mc,md
+        set_args(tn, mc, md) # workaround nose bug when dealing with unicode
+        yield check_roundtrip, tn
 
-def check_roundtrip( topic_name, msg_class, msg_expected, strict=True ):
+def check_roundtrip( topic_name, strict=True ):
+    msg_class, msg_expected = get_args( topic_name ) # workaround
+
     engine = sqlalchemy.create_engine('sqlite:///:memory:')#, echo=True)
     metadata = sqlalchemy.MetaData(bind=engine)
     session = ros_sql.session.get_session(metadata)
