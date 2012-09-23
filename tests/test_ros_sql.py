@@ -61,6 +61,7 @@ def test_simple_message_roundtrip():
     bma.data = [77, 33, -127]
 
     for tn,mc,md in [('/test_string',std_msgs.msg.String, std_msgs.msg.String('xyz')),
+                     ('/test_string2',std_msgs.msg.String, std_msgs.msg.String('x\0yz')),
                      ('/test_bool', std_msgs.msg.Bool, std_msgs.msg.Bool(True)),
                      ('/test_char', std_msgs.msg.Char, std_msgs.msg.Char(254)),
                      ('/test_duration', std_msgs.msg.Duration, std_msgs.msg.Duration(rospy.Duration(1,2))),
