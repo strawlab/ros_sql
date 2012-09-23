@@ -14,9 +14,14 @@ import ros_sql.util as util
 ROS_SQL_COLNAME_PREFIX = models.ROS_SQL_COLNAME_PREFIX
 ROS_TOP_TIMESTAMP_COLNAME_BASE = models.ROS_TOP_TIMESTAMP_COLNAME_BASE
 
-def get_sql_table( session, metadata, topic_name ):
+def get_sql_table( session, metadata, topic_name, prefix=None ):
     """helper function to get table for a given topic name (read and write db)"""
-    mymeta=session.query(models.RosSqlMetadata).filter_by(topic_name=topic_name).one()
+    if prefix is None:
+        mymeta=session.query(models.RosSqlMetadata).\
+                filter_by(topic_name=topic_name).one()
+    else:
+        mymeta=session.query(models.RosSqlMetadata).\
+                filter_by(topic_name=topic_name,prefix=prefix).one()
     return metadata.tables[mymeta.table_name]
 
 def update_parents( session, metadata, update_with_parent, topic_name, pk0, conn ):
@@ -47,9 +52,9 @@ def update_parents( session, metadata, update_with_parent, topic_name, pk0, conn
             raise
 
 
-def msg2sql(session, metadata, topic_name, msg, timestamp=None):
+def msg2sql(session, metadata, topic_name, msg, timestamp=None, prefix=None):
     """top-level call to execute commands for saving a message (write db)"""
-    this_table = get_sql_table( session, metadata, topic_name )
+    this_table = get_sql_table( session, metadata, topic_name, prefix=prefix )
 
     if timestamp is None:
         timestamp=rospy.Time.from_sec( time.time() )
@@ -134,6 +139,7 @@ def get_table_info(session, metadata,topic_name=None,table_name=None):
             'pk_name':mymeta.pk_name,
             'table_name':mymeta.table_name,
             'topic_name':mymeta.topic_name,
+            'prefix':mymeta.prefix,
             'timestamp_columns':timestamp_columns,
             'backref_info_list':backref_info_list,
             'parent_id_name':mymeta.parent_id_name,
@@ -144,6 +150,7 @@ def sql2msg(topic_name,result,session, metadata):
     info = get_table_info( session, metadata, topic_name=topic_name)
     MsgClass = info['class']
     table_name = info['table_name']
+    prefix = info['prefix']
     this_table = metadata.tables[table_name]
 
     inverses = []
@@ -182,7 +189,8 @@ def sql2msg(topic_name,result,session, metadata):
             # --------------------
 
             # get back from SQL
-            new_table = get_sql_table( session, metadata, new_topic )
+            new_table = get_sql_table( session, metadata, new_topic,
+                                       prefix=prefix )
 
             new_primary_key_column = getattr(new_table.c,pk_name)
             s = sqlalchemy.sql.select([new_table], new_primary_key_column==fk )

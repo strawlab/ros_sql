@@ -16,15 +16,16 @@ from ros_sql.models import ROS_SQL_COLNAME_PREFIX, \
      RosSqlMetadata, RosSqlMetadataBackrefs, RosSqlMetadataTimestamps
 import ros_sql.util as util
 
-def add_schemas( session, metadata, list_of_topics_and_messages ):
+def add_schemas( session, metadata, list_of_topics_and_messages, prefix=None ):
     """create tables for multiple topics and messages"""
     for topic_name, msg_class in list_of_topics_and_messages:
-        gen_schema( session, metadata, topic_name, msg_class )
+        gen_schema( session, metadata, topic_name, msg_class, prefix=prefix )
 
-def gen_schema( session, metadata, topic_name, msg_class):
+def gen_schema( session, metadata, topic_name, msg_class, prefix=None):
     """create a SQL table(s) for a given topic and message class"""
     # add table(s) to MetaData instance
-    rx = generate_schema_raw(session, metadata,topic_name,msg_class, top=True)
+    rx = generate_schema_raw(session, metadata,topic_name,msg_class, top=True,
+                             prefix=prefix)
     metadata.create_all( metadata.bind )
 
     # add table tracking row to MetaData instance
@@ -63,13 +64,16 @@ def gen_schema( session, metadata, topic_name, msg_class):
 def generate_schema_raw( session, metadata,
                          topic_name, msg_class, top=True,
                          many_to_one=None,
-                         known_sql_type=None):
+                         known_sql_type=None,
+                         prefix=None):
     """convert a message type into an SQL database schema"""
     tracking_table_rows = []
     timestamp_columns = []
     backref_info_list = []
 
     table_name = util.namify( topic_name )
+    if prefix is not None:
+        table_name = prefix + table_name
 
     this_table = sqlalchemy.Table( table_name, metadata )
 
@@ -124,7 +128,9 @@ def generate_schema_raw( session, metadata,
                 util.add_time_cols( this_table, name, duration=True )
                 timestamp_columns.append( (name,True) )
             else:
-                results = parse_field( session, metadata, topic_name+'.'+name, _type, topic_name, name, pk_name, pk_type, table_name )
+                results = parse_field( session, metadata, topic_name+'.'+name,
+                                       _type, topic_name, name, pk_name,
+                                       pk_type, table_name, prefix=prefix )
                 tracking_table_rows.extend( results['tab_track_rows'] )
 
                 if 'col_args' in results:
@@ -135,7 +141,7 @@ def generate_schema_raw( session, metadata,
                 backref_info_list.extend( results['backref_info_list'] )
 
     # these are the args to RosSqlMetadata:
-    tracking_table_rows.append(  {'row_args':(topic_name, table_name, msg_class._type, msg_class._md5sum, top, pk_name, parent_id_name),
+    tracking_table_rows.append(  {'row_args':(topic_name, table_name, prefix, msg_class._type, msg_class._md5sum, top, pk_name, parent_id_name),
                                   'timestamp_colnames':timestamp_columns,
                                   'backref_info_list':backref_info_list} )
 
@@ -149,8 +155,9 @@ def generate_schema_raw( session, metadata,
         results['foreign_key_column_name']=foreign_key_column_name
     return results
 
-def parse_field( session, metadata, topic_name, _type, source_topic_name, field_name,
-                 parent_pk_name, parent_pk_type, parent_table_name ):
+def parse_field( session, metadata, topic_name, _type, source_topic_name,
+                 field_name, parent_pk_name, parent_pk_type, parent_table_name,
+                 prefix=None ):
     """for a given element within a message, find the schema field type"""
     dt = type_map.get(_type,None)
     tab_track_rows = []
@@ -166,6 +173,8 @@ def parse_field( session, metadata, topic_name, _type, source_topic_name, field_
         return results
 
     other_instance_name = util.namify( topic_name )
+    if prefix is not None:
+        other_instance_name = prefix + other_instance_name
 
     if _type.endswith('[]'):
         # array - need to start another sql table
@@ -187,6 +196,7 @@ def parse_field( session, metadata, topic_name, _type, source_topic_name, field_
                                  topic_name, msg_class, top=False,
                                  known_sql_type=known_sql_type,
                                  many_to_one=(parent_table_name,parent_pk_name,parent_pk_type),
+                                 prefix=prefix,
                                  )
         bi = {'parent_field':field_name,
               'child_table':rx['table_name'],
@@ -203,7 +213,8 @@ def parse_field( session, metadata, topic_name, _type, source_topic_name, field_
     else:
         # _type is another message type
         msg_class = roslib.message.get_message_class(_type)
-        rx = generate_schema_raw(session, metadata,topic_name,msg_class, top=False)
+        rx = generate_schema_raw(session, metadata,topic_name,msg_class,
+                                 top=False, prefix=prefix)
         tab_track_rows.extend( rx['tracking_table_rows'] )
         other_key_name = other_instance_name + '.' + rx['pk_name']
 

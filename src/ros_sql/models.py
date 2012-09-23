@@ -4,7 +4,7 @@ import sqlalchemy.types
 
 ROS_SQL_COLNAME_PREFIX = '_ros_sql'
 ROS_TOP_TIMESTAMP_COLNAME_BASE = ROS_SQL_COLNAME_PREFIX+'_timestamp'
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 Base = sqlalchemy.ext.declarative.declarative_base()
 
@@ -13,6 +13,7 @@ class RosSqlMetadata(Base):
     id = sqlalchemy.Column( sqlalchemy.types.Integer, primary_key=True)
     topic_name = sqlalchemy.Column( sqlalchemy.types.Text)
     table_name = sqlalchemy.Column( sqlalchemy.types.Text)
+    prefix = sqlalchemy.Column( sqlalchemy.types.Text )
     msg_class_name = sqlalchemy.Column( sqlalchemy.types.Text, nullable=False )
     msg_md5sum = sqlalchemy.Column( sqlalchemy.types.Text, nullable=False )
     is_top = sqlalchemy.Column( sqlalchemy.types.Boolean, nullable=False )
@@ -26,9 +27,10 @@ class RosSqlMetadata(Base):
     backrefs = sqlalchemy.orm.relationship("RosSqlMetadataBackrefs",
                                            backref=sqlalchemy.orm.backref(ROS_SQL_COLNAME_PREFIX + '_metadata'))
 
-    def __init__(self, topic_name, table_name, msg_class, msg_md5,is_top,pk_name,parent_id_name):
+    def __init__(self, topic_name, table_name, prefix, msg_class, msg_md5,is_top,pk_name,parent_id_name):
         self.topic_name = topic_name
         self.table_name = table_name
+        self.prefix = prefix
         self.msg_class_name = msg_class
         self.msg_md5sum = msg_md5
         self.is_top = is_top
@@ -37,9 +39,10 @@ class RosSqlMetadata(Base):
         self.ros_sql_schema_version = SCHEMA_VERSION
 
     def __repr__(self):
-        return "<RosSqlMetadata(%r,%r,%r,%r,%r,%r,%r)>"%(
+        return "<RosSqlMetadata(%r,%r,%r,%r,%r,%r,%r,%r)>"%(
             self.topic_name,
             self.table_name,
+            self.prefix,
             self.msg_class_name,
             self.msg_md5sum,
             self.is_top,
@@ -66,6 +69,7 @@ class RosSqlMetadata(Base):
         return (still_equal and
                 self.topic_name             == other.topic_name             and
                 self.table_name             == other.table_name             and
+                self.prefix                 == other.prefix                 and
                 self.msg_class_name         == other.msg_class_name         and
                 self.msg_md5sum             == other.msg_md5sum             and
                 self.is_top                 == other.is_top                 and
