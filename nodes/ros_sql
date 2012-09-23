@@ -17,9 +17,11 @@ import rostopic
 import rosgraph.masterapi
 
 class Recorder:
-    def __init__(self,topics,bind_url_cli,all=False):
+    def __init__(self,topics,bind_url_cli,all=False,prefix=None):
         node_name_base = 'sql_recorder'
         rospy.init_node(node_name_base, anonymous=True)
+
+        self.prefix=prefix
 
         bind_url_default = 'sqlite:///:memory:'
         bind_url = rospy.get_param(node_name_base+'/bind_url',bind_url_default)
@@ -75,7 +77,9 @@ class Recorder:
                        rostopic.get_topic_class(topic, blocking=True)
 
             try:
-                ros2sql.add_schemas(self.session, self.metadata,[(topic,msg_class)])
+                ros2sql.add_schemas(self.session, self.metadata,
+                                    [(topic,msg_class)],
+                                    prefix=self.prefix)
             except ros2sql.MetadataChangedError, err:
                 rospy.logerr( str(err) )
                 continue
@@ -105,7 +109,9 @@ class Recorder:
                 factories.msg2sql(self.session, self.metadata,
                                   topic,
                                   msg,
-                                  timestamp=now)
+                                  timestamp=now,
+                                  prefix=self.prefix,
+                                  )
             if self._do_check_master:
                 self.check_master()
 
@@ -116,13 +122,15 @@ def record(args):
     if not len(args.topic) and not args.all:
         print >> sys.stderr, 'Neither --all nor individual topic name(s) given. Nothing to do.'
         sys.exit(1)
-    r = Recorder(args.topic,args.bind,all=args.all)
+    r = Recorder(args.topic,args.bind,all=args.all,prefix=args.prefix)
     r.run()
 
 class Player:
-    def __init__(self,bind_url_cli,loop=False):
+    def __init__(self,bind_url_cli,loop=False,prefix=None):
         node_name_base = 'sql_player'
         rospy.init_node(node_name_base, anonymous=True)
+
+        self.prefix=prefix
 
         bind_url_default = 'sqlite:///:memory:'
         bind_url = rospy.get_param(node_name_base+'/bind_url',bind_url_default)
@@ -144,10 +152,16 @@ class Player:
 
         all_metadata = self.session.query( models.RosSqlMetadata).all()
         self.meta=dict([(row.topic_name, row) for row in all_metadata if row.is_top])
+        if self.prefix is not None:
+            self.meta=dict([(t,self.meta[t]) for t in self.meta
+                            if self.meta[t].prefix==self.prefix])
+        if len(self.meta)==0:
+            # nothing to do
+            sys.exit(0)
         func=factories.get_sql_table
         self.tables = dict([ (t,func(self.session,self.metadata,t))
                              for t in self.meta])
-        lt = np.max( [len(t) for t in self.meta])
+        lt = max( [len(t) for t in self.meta])
         s=[self._get_timestamps(self.tables[t],self.meta[t].pk_name,t,lt)
            for t in self.meta]
         timestamps = np.concatenate([i for i in s if i is not None])
@@ -228,7 +242,7 @@ class Player:
                 break
 
 def play(args):
-    p = Player(args.bind,loop=args.loop)
+    p = Player(args.bind,loop=args.loop,prefix=args.prefix)
     p.run()
 
 def main():
@@ -244,6 +258,8 @@ def main():
                                help='sqlalchemy URL for database connection')
     parser_record.add_argument('topic', nargs='*',
                                help='topic name(s) to be recorded')
+    parser_record.add_argument('-p','--prefix',type=str,
+                               help='prefix to add to table names')
     parser_record.set_defaults(func=record)
 
     # ------ play --------------
@@ -253,6 +269,8 @@ def main():
                                help='sqlalchemy URL for database connection')
     parser_play.add_argument('-l','--loop',action='store_true',
                                help='loop playback')
+    parser_play.add_argument('-p','--prefix',type=str,
+                               help='prefix to filter table names')
     parser_play.set_defaults(func=play)
 
     # ----------------------------
