@@ -231,7 +231,8 @@ def parse_field( session, metadata, topic_name, _type, source_topic_name,
 class MetadataChangedError(RuntimeError):
     def __init__(self,old_meta_row, new_meta_row):
         super(MetadataChangedError,self).__init__(
-            'metadata changed (original topic %r, new topic %r)'%
-            (old_meta_row.topic_name, new_meta_row.topic_name))
+            'metadata changed (original topic %r, new topic %r): %r -> %r'%
+            (old_meta_row.topic_name, new_meta_row.topic_name,
+             old_meta_row,new_meta_row))
         self.old_meta_row = old_meta_row
         self.new_meta_row = new_meta_row
