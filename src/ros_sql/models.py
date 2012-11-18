@@ -4,7 +4,7 @@ import sqlalchemy.types
 
 ROS_SQL_COLNAME_PREFIX = '_ros_sql'
 ROS_TOP_TIMESTAMP_COLNAME_BASE = ROS_SQL_COLNAME_PREFIX+'_timestamp'
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 Base = sqlalchemy.ext.declarative.declarative_base()
 

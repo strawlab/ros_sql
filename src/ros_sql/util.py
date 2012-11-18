@@ -37,10 +37,6 @@ def capitalize(name):
 def namify( topic_name ):
     if topic_name.startswith('/'):
         topic_name = topic_name[1:]
-    if '/' in topic_name:
-        raise NotImplementedError
-
-    topic_name = topic_name.replace('.','_')
 
     return topic_name.lower()
 
