@@ -7,7 +7,6 @@ import roslib
 import roslib.message
 roslib.load_manifest('ros_sql')
 import rospy
-import ros_sql.ros2sql as ros2sql
 import ros_sql.models as models
 import ros_sql.util as util
 
@@ -17,25 +16,25 @@ ROS_TOP_TIMESTAMP_COLNAME_BASE = models.ROS_TOP_TIMESTAMP_COLNAME_BASE
 def get_sql_table( session, metadata, topic_name, prefix=None ):
     """helper function to get table for a given topic name (read and write db)"""
     if prefix is None:
-        mymeta=session.query(models.RosSqlMetadata).\
-                filter_by(topic_name=topic_name).one()
+        mymeta = session.query(models.RosSqlMetadata).\
+                 filter_by(topic_name=topic_name).one()
     else:
-        mymeta=session.query(models.RosSqlMetadata).\
-                filter_by(topic_name=topic_name,prefix=prefix).one()
+        mymeta = session.query(models.RosSqlMetadata).\
+                 filter_by(topic_name=topic_name,prefix=prefix).one()
     return metadata.tables[mymeta.table_name]
 
 def update_parents( session, metadata, update_with_parent, topic_name, pk0, conn ):
     """helper function for tables containing items in a another table's list (write db)"""
     for field_name in update_with_parent:
         child_topic = topic_name + '.' + field_name
-        child_info = get_table_info( session, metadata, topic_name=child_topic )
+        child_info = get_table_info( session, topic_name=child_topic )
         child_table = metadata.tables[child_info['table_name']]
         child_pk_col = getattr( child_table.c, child_info['pk_name'] )
 
         parent_id_name = child_info['parent_id_name']
         kwargs = {parent_id_name:sqlalchemy.sql.bindparam('backref_id')}
 
-        u = child_table.update().\
+        update_results = child_table.update().\
             where( child_pk_col==sqlalchemy.sql.bindparam('child_id')).\
             values( **kwargs )
 
@@ -45,7 +44,7 @@ def update_parents( session, metadata, update_with_parent, topic_name, pk0, conn
 
         trans = conn.begin()
         try:
-            result = conn.execute( u, *args )
+            conn.execute( update_results, *args )
             trans.commit()
         except:
             trans.rollback()
@@ -57,13 +56,15 @@ def msg2sql(session, metadata, topic_name, msg, timestamp=None, prefix=None):
     this_table = get_sql_table( session, metadata, topic_name, prefix=prefix )
 
     if timestamp is None:
-        timestamp=rospy.Time.from_sec( time.time() )
-    kwargs, atts, update_with_parent = msg2dict(session, metadata,topic_name,msg)
+        timestamp = rospy.Time.from_sec( time.time() )
 
-    kwargs[ROS_TOP_TIMESTAMP_COLNAME_BASE+'_secs']=timestamp.secs
-    kwargs[ROS_TOP_TIMESTAMP_COLNAME_BASE+'_nsecs']=timestamp.nsecs
-    for name,value in atts:
-        kwargs[name]=value
+    kwargs, atts, update_with_parent = msg2dict(
+        session, metadata, topic_name, msg)
+
+    kwargs[ROS_TOP_TIMESTAMP_COLNAME_BASE+'_secs']  = timestamp.secs
+    kwargs[ROS_TOP_TIMESTAMP_COLNAME_BASE+'_nsecs'] = timestamp.nsecs
+    for name, value in atts:
+        kwargs[name] = value
 
     ins = this_table.insert()
 
@@ -71,7 +72,7 @@ def msg2sql(session, metadata, topic_name, msg, timestamp=None, prefix=None):
     conn = engine.connect()
     trans = conn.begin()
     try:
-        result = conn.execute(ins,[kwargs])
+        result = conn.execute(ins, [kwargs])
         trans.commit()
     except:
         trans.rollback()
@@ -86,18 +87,14 @@ _table_info_topic_cache = {}
 _table_info_table_cache = {}
 _timestamp_info_cache = {}
 _backref_info_cache = {}
-def get_table_info(session, metadata,topic_name=None,table_name=None):
+def get_table_info(session, topic_name=None, table_name=None):
     """helper function to get table information (read and write db)"""
-    global _table_info_topic_cache
-    global _table_info_table_cache
-    global _timestamp_info_cache
-    global _backref_info_cache
-
     if topic_name is not None:
         try:
             mymeta = _table_info_topic_cache[topic_name]
         except KeyError:
-            mymeta=session.query(models.RosSqlMetadata).filter_by(topic_name=topic_name).one()
+            mymeta = session.query(
+                models.RosSqlMetadata).filter_by(topic_name=topic_name).one()
             _table_info_topic_cache[topic_name] = mymeta
             _table_info_table_cache[mymeta.table_name] = mymeta
         if table_name is not None:
@@ -107,7 +104,8 @@ def get_table_info(session, metadata,topic_name=None,table_name=None):
         try:
             mymeta = _table_info_table_cache[table_name]
         except KeyError:
-            mymeta=session.query(models.RosSqlMetadata).filter_by(table_name=table_name).one()
+            mymeta = session.query(
+                models.RosSqlMetadata).filter_by(table_name=table_name).one()
             _table_info_table_cache[table_name] = mymeta
             _table_info_topic_cache[mymeta.topic_name] = mymeta
 
@@ -116,17 +114,18 @@ def get_table_info(session, metadata,topic_name=None,table_name=None):
     try:
         myts = _timestamp_info_cache[mymeta.table_name]
     except KeyError:
-        myts=session.query(models.RosSqlMetadataTimestamps).filter_by( main_id=mymeta.id ).all()
+        myts = session.query(
+            models.RosSqlMetadataTimestamps).filter_by( main_id=mymeta.id ).all()
         _timestamp_info_cache[mymeta.table_name] = myts
 
     MsgClass = util.get_msg_class(mymeta.msg_class_name)
     timestamp_columns = []
     for tsrow in myts:
-        timestamp_columns.append((tsrow.column_base_name,tsrow.is_duration))
+        timestamp_columns.append((tsrow.column_base_name, tsrow.is_duration))
     try:
-        mybackrefs=_backref_info_cache[mymeta.table_name]
+        mybackrefs = _backref_info_cache[mymeta.table_name]
     except KeyError:
-        mybackrefs=session.query(models.RosSqlMetadataBackrefs).filter_by( main_id=mymeta.id ).all()
+        mybackrefs = session.query(models.RosSqlMetadataBackrefs).filter_by( main_id=mymeta.id ).all()
         _backref_info_cache[mymeta.table_name] = mybackrefs
     backref_info_list = []
     for backref in mybackrefs:
@@ -145,9 +144,9 @@ def get_table_info(session, metadata,topic_name=None,table_name=None):
             'parent_id_name':mymeta.parent_id_name,
             }
 
-def sql2msg(topic_name,result,session, metadata):
+def sql2msg(topic_name, result, session, metadata):
     """convert query result into message (read db)"""
-    info = get_table_info( session, metadata, topic_name=topic_name)
+    info = get_table_info( session, topic_name=topic_name)
     MsgClass = info['class']
     table_name = info['table_name']
     prefix = info['prefix']
@@ -167,21 +166,18 @@ def sql2msg(topic_name,result,session, metadata):
         top_nsecs = d.pop(ROS_TOP_TIMESTAMP_COLNAME_BASE+'_nsecs')
         results['timestamp'] = util.time_cols_to_ros( top_secs, top_nsecs )
 
-    my_pk = d.pop( info['pk_name'] )
-
     parent_id_name = info['parent_id_name']
     if parent_id_name in d:
         # don't populate resulting message with this
         d.pop( parent_id_name )
 
     for key in d.keys():
-        for fk in forwards.get(key,[]):
+        for fk in forwards.get(key, []):
             field_name = key
-            field = getattr(result,field_name)
+            field = getattr(result, field_name)
             new_topic = topic_name + '.' + field_name
-            new_table_name = util.namify( new_topic )
 
-            new_info = get_table_info( session, metadata, topic_name=new_topic)
+            new_info = get_table_info( session, topic_name=new_topic)
 
             pk_name = new_info['pk_name']
 
@@ -192,7 +188,7 @@ def sql2msg(topic_name,result,session, metadata):
             new_table = get_sql_table( session, metadata, new_topic,
                                        prefix=prefix )
 
-            new_primary_key_column = getattr(new_table.c,pk_name)
+            new_primary_key_column = getattr(new_table.c, pk_name)
             s = sqlalchemy.sql.select([new_table], new_primary_key_column==fk )
 
             conn = metadata.bind.connect()
@@ -211,7 +207,7 @@ def sql2msg(topic_name,result,session, metadata):
 
             tmp1 = getattr( result, name )
             for tmp2 in tmp1:
-                value2 = sql2msg(tn2,tmp2,session, metadata)['msg']
+                value2 = sql2msg(tn2, tmp2, session, metadata)['msg']
                 arr.append( value2 )
 
             assert name not in d
@@ -225,26 +221,24 @@ def sql2msg(topic_name,result,session, metadata):
 
     for backref in info['backref_info_list']:
         backref_values = get_backref_values( backref['child_table'],
-                                             backref['child_field'],
-                                             my_pk, this_table, session, metadata )
+                                             session, metadata )
         d[ backref['parent_field'] ] = backref_values
 
     for k in d:
         if isinstance( d[k], unicode ):
             try:
-                d[k]=str(d[k])
+                d[k] = str(d[k])
             except UnicodeEncodeError:
                 pass
     msg = MsgClass(**d)
     results['msg'] = msg
     return results
 
-def get_backref_values( table_name, field, parent_pk, parent_table, session, metadata ):
+def get_backref_values( table_name, session, metadata ):
     """helper function to fill list (read db)"""
-    new_info = get_table_info(session, metadata, table_name=table_name)
+    new_info = get_table_info(session, table_name=table_name)
     new_table = metadata.tables[new_info['table_name']]
     new_topic = new_info['topic_name']
-    foreign_key_column = getattr(new_table.c,field)
     s = sqlalchemy.sql.select([new_table])
 
     conn = metadata.bind.connect()
@@ -268,7 +262,7 @@ def get_backref_values( table_name, field, parent_pk, parent_table, session, met
 def insert_row( session, metadata, topic_name, name, value ):
     """helper function to insert data (write db)"""
     name2 = topic_name + '.' + name
-    info = get_table_info( session, metadata, topic_name=name2)
+    info = get_table_info( session, topic_name=name2)
 
     table_name = info['table_name']
     this_table = metadata.tables[table_name]
@@ -276,10 +270,10 @@ def insert_row( session, metadata, topic_name, name, value ):
     if isinstance(value, roslib.message.Message ):
         kwargs, atts, update_with_parent = msg2dict( session, metadata, name2, value )
         kw2 = {}
-        for k,row in atts:
+        for k, row in atts:
             assert k not in kwargs # not already there
             assert k not in kw2 # not overwriting
-            kw2[k]=row
+            kw2[k] = row
         kwargs.update(kw2)
     else:
         kwargs = {'data':value}
@@ -291,7 +285,7 @@ def insert_row( session, metadata, topic_name, name, value ):
     conn = engine.connect()
     trans = conn.begin()
     try:
-        result = conn.execute(ins,[kwargs])
+        result = conn.execute(ins, [kwargs])
         trans.commit()
     except:
         trans.rollback()
@@ -302,31 +296,31 @@ def insert_row( session, metadata, topic_name, name, value ):
     pk0 = pk[0]
 
     if update_with_parent is not None:
-        update_parents( session, metadata, update_with_parent, name2, pk0, conn )
+        update_parents( session, metadata, update_with_parent, name2, pk0, conn)
 
     return pk0
 
-def msg2dict(session, metadata,topic_name,msg):
+def msg2dict(session, metadata, topic_name, msg):
     """helper function to convert ROS message to dict (write db)"""
     result = {}
     atts = []
     update_with_parent = {}
-    for name,_type in zip(msg.__slots__, msg._slot_types):
-        value = getattr(msg,name)
+    for name, _type in zip(msg.__slots__, msg._slot_types):
+        value = getattr(msg, name)
         if _type in type_map:
             # simple type
-            if isinstance(value,unicode):
+            if isinstance(value, unicode):
                 try:
                     # try to convert to plain string if possible
                     value = str(value)
                 except UnicodeEncodeError:
                     pass
             result[name] = value
-        elif _type=='time':
+        elif _type == 'time':
             # special case for time type
             result[name+'_secs'] = value.secs
             result[name+'_nsecs'] = value.nsecs
-        elif _type=='duration':
+        elif _type == 'duration':
             # special case for duration type
             result[name+'_secs'] = value.secs
             result[name+'_nsecs'] = value.nsecs
