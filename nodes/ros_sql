@@ -23,13 +23,7 @@ class Recorder:
 
         self.prefix=prefix
 
-        bind_url_default = 'sqlite:///:memory:'
-        bind_url = rospy.get_param(node_name_base+'/bind_url',bind_url_default)
-
-        # command-line overrides default and rosparam
-        if bind_url_cli is not None:
-            bind_url = bind_url_cli
-
+        bind_url = util.get_bind_url( node_name_base, bind_url_cli )
         engine = sqlalchemy.create_engine(bind_url)
         rospy.loginfo('saving to %r'%bind_url)
 
@@ -132,13 +126,7 @@ class Player:
 
         self.prefix=prefix
 
-        bind_url_default = 'sqlite:///:memory:'
-        bind_url = rospy.get_param(node_name_base+'/bind_url',bind_url_default)
-
-        # command-line overrides default and rosparam
-        if bind_url_cli is not None:
-            bind_url = bind_url_cli
-
+        bind_url = util.get_bind_url( node_name_base, bind_url_cli )
         engine = sqlalchemy.create_engine(bind_url)#,echo=True)
         rospy.loginfo('playing from %r'%bind_url)
 
