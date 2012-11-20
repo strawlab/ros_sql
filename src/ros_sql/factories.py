@@ -82,6 +82,7 @@ def msg2sql(session, metadata, topic_name, msg, timestamp=None, prefix=None):
     assert len(pk)==1
     pk0 = pk[0]
     update_parents( session, metadata, update_with_parent, topic_name, pk0, conn )
+    conn.close()
 
 _table_info_topic_cache = {}
 _table_info_table_cache = {}
@@ -198,6 +199,7 @@ def sql2msg(topic_name, result, session, metadata):
             if 1:
                 new_msg = sql2msg(new_topic, msg_actual_sql, session, metadata )['msg']
                 d[field_name] = new_msg
+            conn.close()
 
     if len(inverses):
         for inv in inverses:
@@ -257,6 +259,7 @@ def get_backref_values( table_name, session, metadata ):
             if type_map.has_key(_type):
                 # Collapse messages in array to raw Python type.
                 result = [ri.data for ri in result]
+    conn.close()
     return result
 
 def insert_row( session, metadata, topic_name, name, value ):
@@ -298,6 +301,7 @@ def insert_row( session, metadata, topic_name, name, value ):
     if update_with_parent is not None:
         update_parents( session, metadata, update_with_parent, name2, pk0, conn)
 
+    conn.close()
     return pk0
 
 def msg2dict(session, metadata, topic_name, msg):
