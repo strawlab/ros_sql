@@ -67,7 +67,14 @@ def main():
     args = parser.parse_args(argv[1:])
 
     k = BagToSQL(args.filename, args.bind, prefix=args.prefix)
-    k.run()
+    if 0:
+        k.run()
+    else:
+        import cProfile
+        out_stats_filename = 'bag_to_sql.profile'
+        print 'profiling, stats will be saved to %r'%out_stats_filename
+        cProfile.runctx('k.run()',
+                        globals(), locals(), out_stats_filename)
 
 if __name__=='__main__':
     main()
