@@ -32,20 +32,14 @@ class BagToSQL:
     def run(self):
         topic2msg_class = {}
 
-        count = 0
         for topic, msg, t in self.bag.read_messages():#topics=topics):
-            print 'count %d: %r'%(count,topic)
-            count += 1
             if topic not in topic2msg_class:
-                print 'now schema for topic',topic
                 msg_class = msg.__class__
                 ros2sql.add_schemas(self.session, self.metadata,
                                     [(topic,msg_class)],
                                     prefix=self.prefix)
                 topic2msg_class[topic] = msg_class
 
-            if 0:
-                continue
             factories.msg2sql(self.session, self.metadata,
                               topic,
                               msg,
@@ -61,13 +55,15 @@ def main():
                         help='sqlalchemy URL for database connection')
     parser.add_argument('-p','--prefix',type=str,
                         help='prefix to add to table names')
+    parser.add_argument('--profile',action='store_true',
+                        help='save execution profile')
 
     # use argparse, but only after ROS did its thing
     argv = rospy.myargv()
     args = parser.parse_args(argv[1:])
 
     k = BagToSQL(args.filename, args.bind, prefix=args.prefix)
-    if 0:
+    if not args.profile:
         k.run()
     else:
         import cProfile
