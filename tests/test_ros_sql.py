@@ -92,6 +92,7 @@ def test_simple_message_roundtrip():
                      ('/byte_arr_topic', std_msgs.msg.ByteMultiArray, bma),
                      ('/test_pose_array', geometry_msgs.msg.PoseArray, pa1),
                      ('/test_complex', ros_sql.msg.TestComplex, tc),
+                     ('/test/nested/topic_names', std_msgs.msg.Int8, std_msgs.msg.Int8(7)),
                      ]:
         set_args(tn, mc, md) # workaround nose bug when dealing with unicode
         yield check_roundtrip, tn
