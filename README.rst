@@ -23,7 +23,7 @@ Does ros_sql store the ROS message defintion in the SQL database?
 No, the ROS message definition is not stored in the database. If your
 ROS installation changes the definition of a message type, ros_sql
 will raise an error because the md5sum of the message definition has
-changed. However, the data is all still in the database with a fairly
+changed. However, the data are all still in the database with a fairly
 natural conversion.
 
 What happens if I upgrade ros_sql - will I lose my database?
@@ -44,3 +44,16 @@ That said, it is straightforward to use sqlalchemy to reflect the
 database into Python objects. This could facilitate querying the
 database and perhaps some examples doing this will be added in the
 future.
+
+How fast is it?
+---------------
+
+The performance of ros_sql is fairly slow. A simple benchmark (using
+the bag_to_sql script on a pre-recorded bag file) showed that, on an
+otherwise idle 3.3 GHz quad core computer with SSD, inserting 500
+messages into an sqlite in-memory database took 4.1 seconds, and into
+postgres it took 18 seconds. Our best guess as to the reason for this
+slowness is that batch inserts to the database are not made. (For many
+of the inserts, a return value -- the primary key of the new row -- is
+needed for a subsequent insert. Consequently, it seems that batch
+inserts are not possible with the current design of ros_sql.)
