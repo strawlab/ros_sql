@@ -13,11 +13,12 @@ import rospy
 
 def get_bind_url( node_name_base, bind_url_cli ):
     bind_url_default = 'sqlite:///:memory:'
-    bind_url = rospy.get_param(node_name_base+'/bind_url',bind_url_default)
 
     # command-line overrides default and rosparam
     if bind_url_cli is not None:
         bind_url = bind_url_cli
+    else:
+        bind_url = rospy.get_param(node_name_base+'/bind_url',bind_url_default)
     return bind_url
 
 def get_msg_class(msg_name):
