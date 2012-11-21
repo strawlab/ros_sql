@@ -164,6 +164,8 @@ def sql2msg(topic_name, result, session, metadata):
         top_nsecs = d.pop(ROS_TOP_TIMESTAMP_COLNAME_BASE+'_nsecs')
         results['timestamp'] = util.time_cols_to_ros( top_secs, top_nsecs )
 
+    d.pop( info['pk_name'] )
+
     parent_id_name = info['parent_id_name']
     if parent_id_name in d:
         # don't populate resulting message with this
@@ -288,7 +290,7 @@ def insert_row( session, metadata, topic_name, name, value, conn, trans ):
     pk0 = pk[0]
 
     if update_with_parent is not None:
-        update_parents( session, metadata, update_with_parent, name2, pk0, conn)
+        update_parents( session, metadata, update_with_parent, name2, pk0, conn, trans)
 
     return pk0
 
