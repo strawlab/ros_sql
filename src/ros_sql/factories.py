@@ -23,7 +23,7 @@ def get_sql_table( session, metadata, topic_name, prefix=None ):
                  filter_by(topic_name=topic_name,prefix=prefix).one()
     return metadata.tables[mymeta.table_name]
 
-def update_parents( session, metadata, update_with_parent, topic_name, pk0, conn, trans ):
+def update_parents( session, metadata, update_with_parent, topic_name, pk0, conn ):
     """helper function for tables containing items in a another table's list (write db)"""
     for field_name in update_with_parent:
         child_topic = topic_name + '.' + field_name
@@ -72,7 +72,7 @@ def msg2sql(session, metadata, topic_name, msg, timestamp=None, prefix=None):
         pk = result.inserted_primary_key
         assert len(pk)==1
         pk0 = pk[0]
-        update_parents( session, metadata, update_with_parent, topic_name, pk0, conn, trans )
+        update_parents( session, metadata, update_with_parent, topic_name, pk0, conn )
 
         trans.commit()
     except:
@@ -290,7 +290,7 @@ def insert_row( session, metadata, topic_name, name, value, conn, trans ):
     pk0 = pk[0]
 
     if update_with_parent is not None:
-        update_parents( session, metadata, update_with_parent, name2, pk0, conn, trans)
+        update_parents( session, metadata, update_with_parent, name2, pk0, conn)
 
     return pk0
 
