@@ -15,6 +15,5 @@
   <depend package="std_msgs"/>
   <depend package="geometry_msgs"/>
 
+  <rosdep name="sqlalchemy"/>
 </package>
-
-

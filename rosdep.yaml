@@ -1,0 +1,2 @@
+sqlalchemy:
+  ubuntu: python-sqlalchemy python-psycopg2
