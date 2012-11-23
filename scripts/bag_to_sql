@@ -17,7 +17,9 @@ import ros_sql.util as util
 import rostopic
 
 class BagToSQL:
-    def __init__(self,bag_fname,bind_url_cli,prefix=None):
+    def __init__(self,bag_fname,bind_url_cli,show_progress=False,prefix=None):
+        self.show_progress = show_progress
+
         node_name_base = 'bag_to_sql' # no need to be a real node, though
         self.prefix=prefix
 
@@ -30,9 +32,24 @@ class BagToSQL:
 
         self.bag = rosbag.Bag(bag_fname,mode='r')
     def run(self):
+        if self.show_progress:
+            import progressbar
+            import yaml
+
+            infostr = self.bag._get_yaml_info()
+            info = yaml.load( infostr )
+            maxval = info['messages']
+
+            widgets=[progressbar.Counter(), progressbar.Percentage(),
+                     progressbar.Bar(), progressbar.ETA()]
+            pbar=progressbar.ProgressBar(widgets=widgets,maxval=maxval).start()
+
         topic2msg_class = {}
 
-        for topic, msg, t in self.bag.read_messages():#topics=topics):
+        for count, (topic, msg, t) in enumerate(self.bag.read_messages()):
+            if self.show_progress:
+                pbar.update(count)
+
             if topic not in topic2msg_class:
                 msg_class = msg.__class__
                 ros2sql.add_schemas(self.session, self.metadata,
@@ -46,6 +63,8 @@ class BagToSQL:
                               timestamp=t,
                               prefix=self.prefix,
                               )
+        if self.show_progress:
+            pbar.finish()
 
 def main():
     parser = argparse.ArgumentParser()
@@ -57,12 +76,15 @@ def main():
                         help='prefix to add to table names')
     parser.add_argument('--profile',action='store_true',
                         help='save execution profile')
+    parser.add_argument('--progress',action='store_true',
+                        help='display progress')
 
     # use argparse, but only after ROS did its thing
     argv = rospy.myargv()
     args = parser.parse_args(argv[1:])
 
-    k = BagToSQL(args.filename, args.bind, prefix=args.prefix)
+    k = BagToSQL(args.filename, args.bind, prefix=args.prefix,
+                 show_progress=args.progress)
     if not args.profile:
         k.run()
     else:
