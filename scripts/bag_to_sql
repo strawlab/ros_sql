@@ -1,48 +1,64 @@
 #!/usr/bin/env python
 import argparse
-import sys, time
-import Queue
 import sqlalchemy
-import numpy as np
+import yaml
+
+try:
+    import progressbar
+    have_progressbar = True
+except ImportError:
+    have_progressbar = False
 
 import roslib
 roslib.load_manifest('ros_sql')
 import rospy
 import rosbag
 import ros_sql.session
-import ros_sql.models as models
 import ros_sql.ros2sql as ros2sql
 import ros_sql.factories as factories
 import ros_sql.util as util
-import rostopic
 
-class BagToSQL:
-    def __init__(self,bag_fname,bind_url_cli,show_progress=False,prefix=None):
-        self.show_progress = show_progress
+class _FakeProgress:
+    def __init__(self,maxval):
+        self._maxval = maxval
+    def update(self,n):
+        print "%s/%s" % (n,self._maxval)
+    def finish(self):
+        pass
 
+class DBConnection:
+    def __init__(self, bind_url_cli):
         node_name_base = 'bag_to_sql' # no need to be a real node, though
-        self.prefix=prefix
-
         bind_url = util.get_bind_url( node_name_base, bind_url_cli )
         engine = sqlalchemy.create_engine(bind_url)
         rospy.loginfo('saving to %r'%bind_url)
-
         self.metadata = sqlalchemy.MetaData(bind=engine)
         self.session = ros_sql.session.get_session(self.metadata)
 
+    def close(self):
+        pass #??
+
+class BagToSQL:
+    def __init__(self,dbconnection,bag_fname,show_progress=False,prefix=None):
+        self.show_progress = show_progress
+        self.prefix=prefix
+        self.metadata = dbconnection.metadata
+        self.session = dbconnection.session
+
+        self.bag_fname = bag_fname
         self.bag = rosbag.Bag(bag_fname,mode='r')
     def run(self):
         if self.show_progress:
-            import progressbar
-            import yaml
-
             infostr = self.bag._get_yaml_info()
             info = yaml.load( infostr )
             maxval = info['messages']
 
-            widgets=[progressbar.Counter(), progressbar.Percentage(),
-                     progressbar.Bar(), progressbar.ETA()]
-            pbar=progressbar.ProgressBar(widgets=widgets,maxval=maxval).start()
+            if have_progressbar:
+                widgets = ["%s: " % self.bag_fname, progressbar.Counter(), progressbar.Percentage(),
+                           progressbar.Bar(), progressbar.ETA()]
+                pbar = progressbar.ProgressBar(widgets=widgets,maxval=maxval).start()
+            else:
+                pbar = _FakeProgress(maxval=maxval)
 
         topic2msg_class = {}
 
@@ -69,7 +85,7 @@ class BagToSQL:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('filename',type=str,
-                        help='filename of bag file')
+                        help='filename of bag file', nargs='*')
     parser.add_argument('-b','--bind',type=str,
                         help='sqlalchemy URL for database connection')
     parser.add_argument('-p','--prefix',type=str,
@@ -83,16 +99,18 @@ def main():
     argv = rospy.myargv()
     args = parser.parse_args(argv[1:])
 
-    k = BagToSQL(args.filename, args.bind, prefix=args.prefix,
-                 show_progress=args.progress)
-    if not args.profile:
-        k.run()
-    else:
-        import cProfile
-        out_stats_filename = 'bag_to_sql.profile'
-        print 'profiling, stats will be saved to %r'%out_stats_filename
-        cProfile.runctx('k.run()',
-                        globals(), locals(), out_stats_filename)
+    dbconn = DBConnection(args.bind)
+    for filename in args.filename:
+        k = BagToSQL(dbconn, filename, prefix=args.prefix, show_progress=args.progress)
+        if not args.profile:
+            k.run()
+        else:
+            import cProfile
+            out_stats_filename = 'bag_to_sql.profile'
+            print 'profiling, stats will be saved to %r'%out_stats_filename
+            cProfile.runctx('k.run()',
+                            globals(), locals(), out_stats_filename)
+    dbconn.close()
 
 if __name__=='__main__':
     main()
