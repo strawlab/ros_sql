@@ -28,8 +28,7 @@ class _FakeProgress:
 
 class DBConnection:
     def __init__(self, bind_url_cli):
-        node_name_base = 'bag_to_sql' # no need to be a real node, though
-        bind_url = util.get_bind_url( node_name_base, bind_url_cli )
+        bind_url = util.get_bind_url( bind_url_cli )
         engine = sqlalchemy.create_engine(bind_url)
         rospy.loginfo('saving to %r'%bind_url)
         self.metadata = sqlalchemy.MetaData(bind=engine)
