@@ -42,8 +42,7 @@ class Recorder:
         self._do_check_master = False
 
         self.check_master()
-        if self.record_all:
-            rospy.Timer(rospy.Duration(1.0), self.do_check_master)
+        rospy.Timer(rospy.Duration(1.0), self.do_check_master)
 
     def do_check_master(self,*args):
         # schedule a call to self.check_master() in the main thread
