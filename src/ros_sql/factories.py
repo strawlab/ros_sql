@@ -26,7 +26,7 @@ def get_sql_table( session, metadata, topic_name, prefix=None ):
 def update_parents( session, metadata, update_with_parent, topic_name, pk0, conn ):
     """helper function for tables containing items in a another table's list (write db)"""
     for field_name in update_with_parent:
-        child_topic = topic_name + '.' + field_name
+        child_topic = util.get_msg_child_table(session,topic_name,field_name)
         child_info = get_table_info( session, topic_name=child_topic )
         child_table = metadata.tables[child_info['table_name']]
         child_pk_col = getattr( child_table.c, child_info['pk_name'] )
@@ -179,7 +179,7 @@ def sql2msg(topic_name, result, session, metadata, prefix=None):
         for fk in forwards.get(key, []):
             field_name = key
             field = getattr(result, field_name)
-            new_topic = topic_name + '.' + field_name
+            new_topic = util.get_msg_child_table(session,topic_name,field_name)
 
             new_info = get_table_info( session, topic_name=new_topic)
 
@@ -208,7 +208,7 @@ def sql2msg(topic_name, result, session, metadata, prefix=None):
         for inv in inverses:
             arr = []
             name = inv.name
-            tn2 = topic_name + '.' + name
+            tn2 = util.get_msg_child_table(session,topic_name,name)
 
             tmp1 = getattr( result, name )
             for tmp2 in tmp1:
@@ -270,7 +270,7 @@ def get_backref_values( table_name, field_name, session, metadata, parent_key ):
 
 def insert_row( session, metadata, topic_name, name, value, conn, trans ):
     """helper function to insert data (write db)"""
-    name2 = topic_name + '.' + name
+    name2 = util.get_msg_child_table(session,topic_name,name)
     info = get_table_info( session, topic_name=name2)
 
     table_name = info['table_name']

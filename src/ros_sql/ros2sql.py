@@ -110,10 +110,11 @@ def generate_schema_raw( session, metadata,
     foreign_key_column_name = parent_id_name
     if many_to_one is not None:
         parent_table_name, parent_pk_name, parent_pk_type = many_to_one
+        fk_name = util.get_msg_child_table(session,parent_table_name,parent_pk_name)
         # add column referring back to original table
         this_table.append_column(
             sqlalchemy.Column( foreign_key_column_name,
-                               sqlalchemy.ForeignKey(parent_table_name+'.'+parent_pk_name,ondelete='cascade'),
+                               sqlalchemy.ForeignKey(fk_name,ondelete='cascade'),
                                type_ = parent_pk_type,
                                ))
 
@@ -133,7 +134,8 @@ def generate_schema_raw( session, metadata,
                 util.add_time_cols( this_table, name, duration=True )
                 timestamp_columns.append( (name,True) )
             else:
-                results = parse_field( session, metadata, topic_name+'.'+name,
+                child_name = util.get_msg_child_table(session,topic_name,name)
+                results = parse_field( session, metadata, child_name,
                                        _type, topic_name, name, pk_name,
                                        pk_type, table_name, prefix=prefix )
                 tracking_table_rows.extend( results['tab_track_rows'] )
@@ -210,7 +212,7 @@ def parse_field( session, metadata, topic_name, _type, source_topic_name,
         backref_info_list.append( bi )
 
         tab_track_rows.extend( rx['tracking_table_rows'] )
-        other_key_name = other_instance_name + '.' + rx['pk_name']
+        other_key_name = util.get_msg_child_table(session,other_instance_name,rx['pk_name'])
         results = {
             'tab_track_rows':tab_track_rows,
             'backref_info_list':backref_info_list,
@@ -221,7 +223,8 @@ def parse_field( session, metadata, topic_name, _type, source_topic_name,
         rx = generate_schema_raw(session, metadata,topic_name,msg_class,
                                  top=False, prefix=prefix)
         tab_track_rows.extend( rx['tracking_table_rows'] )
-        other_key_name = other_instance_name + '.' + rx['pk_name']
+
+        other_key_name = util.get_msg_child_table(session,other_instance_name,rx['pk_name'])
 
         results = {
             'col_args': ( sqlalchemy.ForeignKey(other_key_name,ondelete='cascade'), ),

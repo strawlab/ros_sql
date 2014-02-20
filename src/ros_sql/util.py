@@ -18,6 +18,16 @@ def get_topics( topics_cli ):
         n = rospy.get_name()+"/topics"
         return [t.replace(n,"") for t in rospy.get_param_names() if t.startswith(n)]
 
+def get_msg_child_table(session, table_name, child_name):
+    #sqlite table names cannot contain dots
+    if "sqlite" in session.bind.dialect.name:
+        if child_name in ("id","parent_id"):
+            return table_name + "." + child_name
+        else:
+            return table_name + "__" + child_name
+    else:
+        return table_name + "." + child_name
+
 def get_bind_url( bind_url_cli ):
     bind_url_default = 'sqlite:///:memory:'
     # command-line overrides default and rosparam
