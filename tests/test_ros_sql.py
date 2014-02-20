@@ -85,7 +85,7 @@ def test_simple_message_roundtrip():
                      ('/test_int16', std_msgs.msg.Int16, std_msgs.msg.Int16(-190)),
                      ('/test_uint16', std_msgs.msg.UInt16, std_msgs.msg.UInt16(2**15+1)),
                      ('/test_int32', std_msgs.msg.Int32, std_msgs.msg.Int32(-190)),
-                     ('/test_uint32', std_msgs.msg.UInt32, std_msgs.msg.UInt32(2**31+1)),
+                     ('/test_uint32', std_msgs.msg.UInt32, std_msgs.msg.UInt32(2**31-1)),
                      ('/test_int64', std_msgs.msg.Int64, std_msgs.msg.Int64(-190)),
                      ('/test_uint64', std_msgs.msg.UInt64, std_msgs.msg.UInt64(2**62+1)),
                      ('/test_pose', geometry_msgs.msg.Pose, pose1),
