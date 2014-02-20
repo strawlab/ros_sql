@@ -29,12 +29,6 @@ def get_msg_class(msg_name):
     klass = getattr(module,class_name)
     return klass
 
-def capitalize(name):
-    "name_with_parts -> NameWithParts"
-    parts = name.split('_')
-    parts = [p.capitalize() for p in parts]
-    return ''.join(parts)
-
 def namify( topic_name ):
     if topic_name.startswith('/'):
         topic_name = topic_name[1:]
