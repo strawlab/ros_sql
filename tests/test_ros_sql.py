@@ -1,5 +1,6 @@
 import sqlalchemy
 import StringIO
+import os
 
 import roslib
 roslib.load_manifest('ros_sql')
@@ -100,9 +101,6 @@ def test_simple_message_roundtrip():
 def check_roundtrip( topic_name, strict=True ):
     msg_class, msg_expected = get_args( topic_name ) # workaround
 
-    engine = sqlalchemy.create_engine('sqlite:///:memory:')#, echo=True)
-    metadata = sqlalchemy.MetaData(bind=engine)
-    session = ros_sql.session.get_session(metadata)
 
     ros2sql.add_schemas(session,metadata,[(topic_name,msg_class)])
     metadata.create_all()
@@ -119,7 +117,6 @@ def check_roundtrip( topic_name, strict=True ):
     this_table = factories.get_sql_table(session, metadata, topic_name)
     s = sqlalchemy.sql.select([this_table])
 
-    conn = metadata.bind.connect()
     sa_result = conn.execute(s)
     msg_actual_sql = sa_result.fetchone()
     sa_result.close()
@@ -137,3 +134,18 @@ def check_roundtrip( topic_name, strict=True ):
     # print 'msg_actual'
     # print msg_actual
     assert msg_actual == msg_expected
+
+def setup_module():
+    global engine, metadata, session, conn
+
+    if int(os.environ.get('TEST_POSTGRES','0')):
+        engine = sqlalchemy.create_engine('postgresql:///yourdb')
+    else:
+        engine = sqlalchemy.create_engine('sqlite:///:memory:')#, echo=True)
+    metadata = sqlalchemy.MetaData(bind=engine)
+    session = ros_sql.session.get_session(metadata)
+    conn = metadata.bind.connect()
+
+def teardown_module():
+    conn.close()
+    engine.dispose()
