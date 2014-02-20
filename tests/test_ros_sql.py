@@ -126,13 +126,14 @@ def check_roundtrip( topic_name, strict=True ):
     timestamp = result['timestamp']
     msg_actual = result['msg']
 
-    # print 'FINAL *************'
-    # print
-    # print 'msg_expected'
-    # print msg_expected
-    # print
-    # print 'msg_actual'
-    # print msg_actual
+    if int(os.environ.get('TEST_PRINT','0')):
+        print 'FINAL *************'
+        print
+        print 'msg_expected'
+        print msg_expected
+        print
+        print 'msg_actual'
+        print msg_actual
     assert msg_actual == msg_expected
 
 def setup_module():
