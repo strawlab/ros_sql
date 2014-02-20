@@ -17,13 +17,17 @@ import rostopic
 import rosgraph.masterapi
 
 class Recorder:
-    def __init__(self,topics,bind_url_cli,all=False,prefix=None):
-        node_name_base = 'sql_recorder'
-        rospy.init_node(node_name_base, anonymous=True)
+    def __init__(self,topics,bind_url_cli,prefix,all=False):
+        rospy.init_node('sql_recorder', anonymous=True)
 
-        self.prefix=prefix
+        topics = util.get_topics(topics)
+        if not len(topics) and not all:
+            print >> sys.stderr, 'Neither --all nor individual topic name(s) given. Nothing to do.'
+            sys.exit(1)
 
-        bind_url = util.get_bind_url( node_name_base, bind_url_cli )
+        self.prefix = util.get_prefix(prefix)
+
+        bind_url = util.get_bind_url( bind_url_cli )
         engine = sqlalchemy.create_engine(bind_url)
         rospy.loginfo('saving to %r'%bind_url)
 
@@ -42,8 +46,7 @@ class Recorder:
         self._do_check_master = False
 
         self.check_master()
-        if self.record_all:
-            rospy.Timer(rospy.Duration(1.0), self.do_check_master)
+        rospy.Timer(rospy.Duration(1.0), self.do_check_master)
 
     def do_check_master(self,*args):
         # schedule a call to self.check_master() in the main thread
@@ -113,20 +116,16 @@ def record(args):
     if args.all and len(args.topic):
         print >> sys.stderr, 'Use of --all and individual topic names mutually exclusive'
         sys.exit(1)
-    if not len(args.topic) and not args.all:
-        print >> sys.stderr, 'Neither --all nor individual topic name(s) given. Nothing to do.'
-        sys.exit(1)
-    r = Recorder(args.topic,args.bind,all=args.all,prefix=args.prefix)
+    r = Recorder(args.topic,args.bind,args.prefix,all=args.all)
     r.run()
 
 class Player:
-    def __init__(self,bind_url_cli,loop=False,prefix=None):
-        node_name_base = 'sql_player'
-        rospy.init_node(node_name_base, anonymous=True)
+    def __init__(self,bind_url_cli,prefix,loop=False):
+        rospy.init_node('sql_player', anonymous=True)
 
-        self.prefix=prefix
+        self.prefix = util.get_prefix(prefix)
 
-        bind_url = util.get_bind_url( node_name_base, bind_url_cli )
+        bind_url = util.get_bind_url( bind_url_cli )
         engine = sqlalchemy.create_engine(bind_url)#,echo=True)
         rospy.loginfo('playing from %r'%bind_url)
 
@@ -230,7 +229,7 @@ class Player:
                 break
 
 def play(args):
-    p = Player(args.bind,loop=args.loop,prefix=args.prefix)
+    p = Player(args.bind,args.prefix,loop=args.loop)
     p.run()
 
 def main():

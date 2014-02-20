@@ -11,15 +11,24 @@ import roslib
 roslib.load_manifest('ros_sql')
 import rospy
 
-def get_bind_url( node_name_base, bind_url_cli ):
-    bind_url_default = 'sqlite:///:memory:'
+def get_topics( topics_cli ):
+    if topics_cli:
+        return topics_cli
+    else:
+        n = rospy.get_name()+"/topics"
+        return [t.replace(n,"") for t in rospy.get_param_names() if t.startswith(n)]
 
+def get_bind_url( bind_url_cli ):
+    bind_url_default = 'sqlite:///:memory:'
     # command-line overrides default and rosparam
     if bind_url_cli is not None:
         bind_url = bind_url_cli
     else:
-        bind_url = rospy.get_param(node_name_base+'/bind_url',bind_url_default)
+        bind_url = rospy.get_param('~bind_url',bind_url_default)
     return bind_url
+
+def get_prefix( prefix_cli ):
+    return rospy.get_param('~prefix',prefix_cli)
 
 def get_msg_class(msg_name):
     p1,p2 = msg_name.split('/')
