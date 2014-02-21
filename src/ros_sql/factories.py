@@ -164,7 +164,7 @@ def sql2msg(topic_name, result, session, metadata):
         top_nsecs = d.pop(ROS_TOP_TIMESTAMP_COLNAME_BASE+'_nsecs')
         results['timestamp'] = util.time_cols_to_ros( top_secs, top_nsecs )
 
-    d.pop( info['pk_name'] )
+    this_pk = d.pop( info['pk_name'] )
 
     parent_id_name = info['parent_id_name']
     if parent_id_name in d:
@@ -222,7 +222,9 @@ def sql2msg(topic_name, result, session, metadata):
 
     for backref in info['backref_info_list']:
         backref_values = get_backref_values( backref['child_table'],
-                                             session, metadata )
+                                             backref['child_field'],
+                                             session, metadata,
+                                             this_pk )
         d[ backref['parent_field'] ] = backref_values
 
     for k in d:
@@ -235,12 +237,13 @@ def sql2msg(topic_name, result, session, metadata):
     results['msg'] = msg
     return results
 
-def get_backref_values( table_name, session, metadata ):
+def get_backref_values( table_name, field_name, session, metadata, parent_key ):
     """helper function to fill list (read db)"""
     new_info = get_table_info(session, table_name=table_name)
     new_table = metadata.tables[new_info['table_name']]
+    column = getattr(new_table.c, field_name)
     new_topic = new_info['topic_name']
-    s = sqlalchemy.sql.select([new_table])
+    s = sqlalchemy.sql.select([new_table], column==parent_key)
 
     conn = metadata.bind.connect()
     sa_result = conn.execute(s)
