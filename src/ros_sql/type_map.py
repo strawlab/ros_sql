@@ -29,5 +29,5 @@ type_map = {
     'float64':
         s.Float(precision=53),
     'string':
-        s.LargeBinary(),
+        s.Text(),
     }
