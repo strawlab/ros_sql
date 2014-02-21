@@ -75,7 +75,9 @@ def msg2sql(session, metadata, topic_name, msg, timestamp=None, prefix=None):
         update_parents( session, metadata, update_with_parent, topic_name, pk0, conn )
 
         trans.commit()
-    except:
+    except Exception, e:
+        rospy.logerr("error storing message from topic %s (prefix: %s)\n%s" % (
+                      topic_name, prefix,e))
         trans.rollback()
         raise
 
