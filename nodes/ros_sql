@@ -211,7 +211,7 @@ class Player:
                 result_sql = sa_result.fetchone()
                 sa_result.close()
 
-                next_msg = factories.sql2msg( topic, result_sql, self.session, self.metadata )['msg']
+                next_msg = factories.sql2msg( topic, result_sql, self.session, self.metadata, prefix=self.prefix )['msg']
 
                 now = time.time()
                 if idx==0:
