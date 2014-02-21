@@ -85,46 +85,50 @@ _table_info_topic_cache = {}
 _table_info_table_cache = {}
 _timestamp_info_cache = {}
 _backref_info_cache = {}
-def get_table_info(session, topic_name=None, table_name=None):
+def get_table_info(session, topic_name=None, table_name=None, prefix=None):
     """helper function to get table information (read and write db)"""
     if topic_name is not None:
         try:
-            mymeta = _table_info_topic_cache[topic_name]
+            mymeta = _table_info_topic_cache[(topic_name,prefix)]
         except KeyError:
             mymeta = session.query(
-                models.RosSqlMetadata).filter_by(topic_name=topic_name).one()
-            _table_info_topic_cache[topic_name] = mymeta
-            _table_info_table_cache[mymeta.table_name] = mymeta
+                models.RosSqlMetadata).filter_by(topic_name=topic_name,
+                                                 prefix=prefix,
+                                                 ).one()
+            _table_info_topic_cache[(topic_name,prefix)] = mymeta
+            _table_info_table_cache[(mymeta.table_name,prefix)] = mymeta
         if table_name is not None:
             assert mymeta.table_name == table_name
     else:
         assert table_name is not None
         try:
-            mymeta = _table_info_table_cache[table_name]
+            mymeta = _table_info_table_cache[(table_name,prefix)]
         except KeyError:
             mymeta = session.query(
-                models.RosSqlMetadata).filter_by(table_name=table_name).one()
-            _table_info_table_cache[table_name] = mymeta
-            _table_info_topic_cache[mymeta.topic_name] = mymeta
+                models.RosSqlMetadata).filter_by(table_name=table_name,
+                                                 prefix=prefix,
+                                                 ).one()
+            _table_info_table_cache[(table_name,prefix)] = mymeta
+            _table_info_topic_cache[(mymeta.topic_name,prefix)] = mymeta
 
     assert mymeta.ros_sql_schema_version == models.SCHEMA_VERSION
 
     try:
-        myts = _timestamp_info_cache[mymeta.table_name]
+        myts = _timestamp_info_cache[(mymeta.table_name,prefix)]
     except KeyError:
         myts = session.query(
             models.RosSqlMetadataTimestamps).filter_by( main_id=mymeta.id ).all()
-        _timestamp_info_cache[mymeta.table_name] = myts
+        _timestamp_info_cache[(mymeta.table_name,prefix)] = myts
 
     MsgClass = util.get_msg_class(mymeta.msg_class_name)
     timestamp_columns = []
     for tsrow in myts:
         timestamp_columns.append((tsrow.column_base_name, tsrow.is_duration))
     try:
-        mybackrefs = _backref_info_cache[mymeta.table_name]
+        mybackrefs = _backref_info_cache[(mymeta.table_name,prefix)]
     except KeyError:
         mybackrefs = session.query(models.RosSqlMetadataBackrefs).filter_by( main_id=mymeta.id ).all()
-        _backref_info_cache[mymeta.table_name] = mybackrefs
+        _backref_info_cache[(mymeta.table_name,prefix)] = mybackrefs
     backref_info_list = []
     for backref in mybackrefs:
         backref_info_list.append( {'parent_field':backref.parent_field,
@@ -142,9 +146,9 @@ def get_table_info(session, topic_name=None, table_name=None):
             'parent_id_name':mymeta.parent_id_name,
             }
 
-def sql2msg(topic_name, result, session, metadata):
+def sql2msg(topic_name, result, session, metadata, prefix=None):
     """convert query result into message (read db)"""
-    info = get_table_info( session, topic_name=topic_name)
+    info = get_table_info( session, topic_name=topic_name, prefix=prefix)
     MsgClass = info['class']
     table_name = info['table_name']
     prefix = info['prefix']
@@ -196,7 +200,7 @@ def sql2msg(topic_name, result, session, metadata):
             msg_actual_sql = sa_result.fetchone()
             sa_result.close()
             if 1:
-                new_msg = sql2msg(new_topic, msg_actual_sql, session, metadata )['msg']
+                new_msg = sql2msg(new_topic, msg_actual_sql, session, metadata, prefix=prefix )['msg']
                 d[field_name] = new_msg
             conn.close()
 

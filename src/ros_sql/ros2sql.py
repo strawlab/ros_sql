@@ -49,7 +49,10 @@ def gen_schema( session, metadata, topic_name, msg_class, prefix=None):
         new_meta_row.backrefs = backref_rows
 
         # if equivalent is already in database, don't add
-        old_meta_rows=session.query(RosSqlMetadata).filter_by(topic_name=new_meta_row.topic_name).all()
+        old_meta_rows=session.query(RosSqlMetadata).filter_by(topic_name=new_meta_row.topic_name,
+                                                              prefix=prefix,
+                                                              ).all()
+
         if len(old_meta_rows):
             assert len(old_meta_rows)==1
             old_meta_row = old_meta_rows[0]
