@@ -23,11 +23,11 @@ def get_sql_table( session, metadata, topic_name, prefix=None ):
                  filter_by(topic_name=topic_name,prefix=prefix).one()
     return metadata.tables[mymeta.table_name]
 
-def update_parents( session, metadata, update_with_parent, topic_name, pk0, conn ):
+def update_parents( session, metadata, update_with_parent, topic_name, pk0, conn, prefix=None ):
     """helper function for tables containing items in a another table's list (write db)"""
     for field_name in update_with_parent:
         child_topic = topic_name + '.' + field_name
-        child_info = get_table_info( session, topic_name=child_topic )
+        child_info = get_table_info( session, topic_name=child_topic, prefix=prefix )
         child_table = metadata.tables[child_info['table_name']]
         child_pk_col = getattr( child_table.c, child_info['pk_name'] )
 
@@ -58,7 +58,7 @@ def msg2sql(session, metadata, topic_name, msg, timestamp=None, prefix=None):
 
     try:
         kwargs, atts, update_with_parent = msg2dict(
-            session, metadata, topic_name, msg, conn, trans)
+            session, metadata, topic_name, msg, conn, trans, prefix=prefix)
 
         kwargs[ROS_TOP_TIMESTAMP_COLNAME_BASE+'_secs']  = timestamp.secs
         kwargs[ROS_TOP_TIMESTAMP_COLNAME_BASE+'_nsecs'] = timestamp.nsecs
@@ -72,7 +72,7 @@ def msg2sql(session, metadata, topic_name, msg, timestamp=None, prefix=None):
         pk = result.inserted_primary_key
         assert len(pk)==1
         pk0 = pk[0]
-        update_parents( session, metadata, update_with_parent, topic_name, pk0, conn )
+        update_parents( session, metadata, update_with_parent, topic_name, pk0, conn, prefix=prefix )
 
         trans.commit()
     except Exception, e:
@@ -183,7 +183,7 @@ def sql2msg(topic_name, result, session, metadata, prefix=None):
             field = getattr(result, field_name)
             new_topic = topic_name + '.' + field_name
 
-            new_info = get_table_info( session, topic_name=new_topic)
+            new_info = get_table_info( session, topic_name=new_topic, prefix=prefix)
 
             pk_name = new_info['pk_name']
 
@@ -243,9 +243,9 @@ def sql2msg(topic_name, result, session, metadata, prefix=None):
     results['msg'] = msg
     return results
 
-def get_backref_values( table_name, field_name, session, metadata, parent_key ):
+def get_backref_values( table_name, field_name, session, metadata, parent_key, prefix=None ):
     """helper function to fill list (read db)"""
-    new_info = get_table_info(session, table_name=table_name)
+    new_info = get_table_info(session, table_name=table_name, prefix=prefix)
     new_table = metadata.tables[new_info['table_name']]
     column = getattr(new_table.c, field_name)
     new_topic = new_info['topic_name']
@@ -256,7 +256,7 @@ def get_backref_values( table_name, field_name, session, metadata, parent_key ):
     msg_actual_sqls = sa_result.fetchall()
     result = []
     for msg_actual_sql in msg_actual_sqls:
-        new_msg = sql2msg(new_topic, msg_actual_sql, session, metadata )['msg']
+        new_msg = sql2msg(new_topic, msg_actual_sql, session, metadata, prefix=prefix )['msg']
         result.append(new_msg)
     sa_result.close()
     if len(result):
@@ -270,16 +270,16 @@ def get_backref_values( table_name, field_name, session, metadata, parent_key ):
     conn.close()
     return result
 
-def insert_row( session, metadata, topic_name, name, value, conn, trans ):
+def insert_row( session, metadata, topic_name, name, value, conn, trans, prefix=None ):
     """helper function to insert data (write db)"""
     name2 = topic_name + '.' + name
-    info = get_table_info( session, topic_name=name2)
+    info = get_table_info( session, topic_name=name2, prefix=prefix)
 
     table_name = info['table_name']
     this_table = metadata.tables[table_name]
 
     if isinstance(value, roslib.message.Message ):
-        kwargs, atts, update_with_parent = msg2dict( session, metadata, name2, value, conn, trans )
+        kwargs, atts, update_with_parent = msg2dict( session, metadata, name2, value, conn, trans, prefix=prefix )
         kw2 = {}
         for k, row in atts:
             assert k not in kwargs # not already there
@@ -299,11 +299,11 @@ def insert_row( session, metadata, topic_name, name, value, conn, trans ):
     pk0 = pk[0]
 
     if update_with_parent is not None:
-        update_parents( session, metadata, update_with_parent, name2, pk0, conn)
+        update_parents( session, metadata, update_with_parent, name2, pk0, conn, prefix=prefix)
 
     return pk0
 
-def msg2dict(session, metadata, topic_name, msg, conn, trans):
+def msg2dict(session, metadata, topic_name, msg, conn, trans, prefix=None):
     """helper function to convert ROS message to dict (write db)"""
     result = {}
     atts = []
@@ -331,12 +331,12 @@ def msg2dict(session, metadata, topic_name, msg, conn, trans):
             # special case for array type
             refs = []
             for element in value:
-                row = insert_row( session, metadata, topic_name, name, element, conn, trans )
+                row = insert_row( session, metadata, topic_name, name, element, conn, trans, prefix=prefix )
                 refs.append(row)
             update_with_parent[name] = refs
         else:
             # compound type
             #result[name] = msg2dict( value )
-            row = insert_row( session, metadata, topic_name, name, value, conn, trans )
+            row = insert_row( session, metadata, topic_name, name, value, conn, trans, prefix=prefix )
             atts.append( (name, row) )
     return result, atts, update_with_parent
