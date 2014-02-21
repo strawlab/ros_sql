@@ -28,7 +28,8 @@ class Recorder:
         self.prefix = util.get_prefix(prefix)
 
         bind_url = util.get_bind_url( bind_url_cli )
-        engine = sqlalchemy.create_engine(bind_url)
+        engine = sqlalchemy.create_engine(bind_url,
+                                          echo=rospy.get_param('~echo',False))
         rospy.loginfo('saving to %r'%bind_url)
 
         self.metadata = sqlalchemy.MetaData(bind=engine)
