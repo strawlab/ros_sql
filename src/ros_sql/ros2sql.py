@@ -76,8 +76,8 @@ def generate_schema_raw( session, metadata,
 
     table_name = util.namify( topic_name )
     if prefix is not None:
-        if not (prefix.startswith('/') and prefix.endswith('/')):
-            raise ValueError("prefix must start and stop with slash ('/')")
+        #if not (prefix.startswith('/') and prefix.endswith('/')):
+        #    raise ValueError("prefix must start and stop with slash ('/')")
         table_name = prefix + table_name
 
     this_table = sqlalchemy.Table( table_name, metadata )
