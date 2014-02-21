@@ -98,11 +98,12 @@ def test_simple_message_roundtrip():
         set_args(tn, mc, md) # workaround nose bug when dealing with unicode
         yield check_roundtrip, tn
 
-def check_roundtrip( topic_name, strict=True ):
+def check_roundtrip( topic_name, strict=True, prefix=None ):
     msg_class, msg_expected = get_args( topic_name ) # workaround
+    check_roundtrip_inner( topic_name, msg_class, msg_expected, strict=strict )
 
-
-    ros2sql.add_schemas(session,metadata,[(topic_name,msg_class)])
+def check_roundtrip_inner( topic_name, msg_class, msg_expected, strict=True, prefix=None ):
+    ros2sql.add_schemas(session,metadata,[(topic_name,msg_class)],prefix=prefix)
     metadata.create_all()
 
     if strict:
@@ -111,17 +112,17 @@ def check_roundtrip( topic_name, strict=True ):
         msg_expected.serialize( buf )
 
     # send to SQL
-    factories.msg2sql(session, metadata, topic_name, msg_expected)
+    factories.msg2sql(session, metadata, topic_name, msg_expected, prefix=prefix)
 
     # get back from SQL
-    this_table = factories.get_sql_table(session, metadata, topic_name)
+    this_table = factories.get_sql_table(session, metadata, topic_name, prefix=prefix)
     s = sqlalchemy.sql.select([this_table])
 
     sa_result = conn.execute(s)
     msg_actual_sql = sa_result.fetchone()
     sa_result.close()
 
-    result = factories.sql2msg( topic_name, msg_actual_sql, session, metadata ) # convert to ROS
+    result = factories.sql2msg( topic_name, msg_actual_sql, session, metadata, prefix=prefix ) # convert to ROS
 
     timestamp = result['timestamp']
     msg_actual = result['msg']
@@ -131,10 +132,28 @@ def check_roundtrip( topic_name, strict=True ):
         print
         print 'msg_expected'
         print msg_expected
+        print repr(msg_expected)
+        print type(msg_expected)
         print
         print 'msg_actual'
         print msg_actual
+        print repr(msg_actual)
+        print type(msg_actual)
+
     assert msg_actual == msg_expected
+
+def test_prefixes():
+    vals = [('/tn', std_msgs.msg.UInt8, std_msgs.msg.UInt8(254), '/foo/'),
+            ('/tn', std_msgs.msg.UInt8, std_msgs.msg.UInt8(253), '/bar/'),
+            ('/tn', std_msgs.msg.Int32, std_msgs.msg.Int32(-1234), '/baz3/'), # type change on same topic name but different prefix
+            ]
+
+    for v in vals:
+        yield check_prefixes, v
+
+def check_prefixes( v ):
+    topic_name, msg_class, msg_expected, prefix = v
+    check_roundtrip_inner( topic_name, msg_class, msg_expected, prefix=prefix )
 
 def setup_module():
     global engine, metadata, session, conn
