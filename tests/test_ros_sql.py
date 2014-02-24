@@ -143,9 +143,23 @@ def check_roundtrip_inner( topic_name, msg_class, msg_expected, strict=True, pre
     assert msg_actual == msg_expected
 
 def test_prefixes():
+    pose1 = geometry_msgs.msg.Pose()
+    pose1.position.x = 1
+    pose1.position.y = 2
+    pose1.position.z = 3
+
+    pose1.orientation.x = -0.01
+    pose1.orientation.y = 0
+    pose1.orientation.z = 0
+    pose1.orientation.w = 4.56
+
     vals = [('/tn', std_msgs.msg.UInt8, std_msgs.msg.UInt8(254), '/foo/'),
             ('/tn', std_msgs.msg.UInt8, std_msgs.msg.UInt8(253), '/bar/'),
             ('/tn', std_msgs.msg.Int32, std_msgs.msg.Int32(-1234), '/baz3/'), # type change on same topic name but different prefix
+
+            ('/test_pose', geometry_msgs.msg.Pose, pose1, '/foo/'),
+            ('/test_pose', geometry_msgs.msg.Pose, pose1, '/bar/'),
+            ('/test/nested_pose', geometry_msgs.msg.Pose, pose1, '/foo/'),
             ]
 
     for v in vals:
