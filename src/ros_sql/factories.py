@@ -45,8 +45,10 @@ def update_parents( session, metadata, update_with_parent, topic_name, pk0, conn
         conn.execute( update_results, *args )
 
 
-def msg2sql(session, metadata, topic_name, msg, timestamp=None, prefix=None):
+def msg2sql(session, metadata, topic_name, msg, timestamp=None, prefix=None, toplevel_columns=None):
     """top-level call to execute commands for saving a message (write db)"""
+    if toplevel_columns is None:
+        toplevel_columns = {}
     this_table = get_sql_table( session, metadata, topic_name, prefix=prefix )
 
     if timestamp is None:
@@ -64,6 +66,9 @@ def msg2sql(session, metadata, topic_name, msg, timestamp=None, prefix=None):
         kwargs[ROS_TOP_TIMESTAMP_COLNAME_BASE+'_nsecs'] = timestamp.nsecs
         for name, value in atts:
             kwargs[name] = value
+        for column_name in toplevel_columns:
+            assert column_name not in kwargs
+            kwargs[column_name] = toplevel_columns[column_name]
 
         ins = this_table.insert()
 

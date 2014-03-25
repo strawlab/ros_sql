@@ -26,6 +26,7 @@ class Recorder:
             sys.exit(1)
 
         self.prefix = util.get_prefix(prefix)
+        self.toplevel_columns = util.get_toplevel_columns()
 
         bind_url = util.get_bind_url( bind_url_cli )
         engine = sqlalchemy.create_engine(bind_url,
@@ -80,7 +81,9 @@ class Recorder:
             try:
                 ros2sql.add_schemas(self.session, self.metadata,
                                     [(topic,msg_class)],
-                                    prefix=self.prefix)
+                                    prefix=self.prefix,
+                                    toplevel_columns=self.toplevel_columns,
+                                    )
             except ros2sql.MetadataChangedError, err:
                 rospy.logerr( str(err) )
                 continue
@@ -112,6 +115,7 @@ class Recorder:
                                   msg,
                                   timestamp=now,
                                   prefix=self.prefix,
+                                  toplevel_columns=self.toplevel_columns,
                                   )
             if self._do_check_master:
                 self.check_master()

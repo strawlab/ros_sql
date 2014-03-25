@@ -35,6 +35,11 @@ def get_bind_url( bind_url_cli ):
 def get_prefix( prefix_cli ):
     return rospy.get_param('~prefix',prefix_cli)
 
+def get_toplevel_columns():
+    toplevel_columns_default = {}
+    toplevel_columns = rospy.get_param('~toplevel_columns',toplevel_columns_default)
+    return toplevel_columns
+
 def get_msg_class(msg_name):
     p1,p2 = msg_name.split('/')
     module_name = p1+'.msg'
