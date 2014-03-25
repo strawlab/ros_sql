@@ -63,13 +63,14 @@ def time_cols_to_ros( time_secs, time_nsecs, is_duration=False ):
     else:
         return rospy.Duration( time_secs2, time_nsecs2 )
 
-def add_time_cols(this_table, prefix, duration=False):
-    c1 = sqlalchemy.Column( prefix+'_secs',  type_map['uint64'] )
-    c2 = sqlalchemy.Column( prefix+'_nsecs', type_map['uint64'] )
+def add_time_cols(this_table, name_base, duration=False):
+    assert '/' not in name_base
+    c1 = sqlalchemy.Column( name_base+'_secs',  type_map['uint64'] )
+    c2 = sqlalchemy.Column( name_base+'_nsecs', type_map['uint64'] )
     this_table.append_column(c1)
     this_table.append_column(c2)
     if not duration:
-        ix = sqlalchemy.schema.Index( 'ix_'+this_table.name+prefix, c1, c2 )
+        ix = sqlalchemy.schema.Index( 'ix_'+this_table.name+name_base, c1, c2 )
         return ix
     else:
         return None
