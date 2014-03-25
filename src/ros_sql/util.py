@@ -15,8 +15,13 @@ def get_topics( topics_cli ):
     if topics_cli:
         return topics_cli
     else:
-        n = rospy.get_name()+"/topics"
-        return [t.replace(n,"") for t in rospy.get_param_names() if t.startswith(n)]
+        topics = rospy.get_param('~topics',None)
+        if topics is None:
+            n = rospy.get_name()+"/topics"
+            topics = [t.replace(n,"") for t in rospy.get_param_names() if t.startswith(n)]
+            if len(topics):
+                rospy.logwarn('old API usage: setting topics via multiple ROS parameters')
+        return topics
 
 def get_bind_url( bind_url_cli ):
     bind_url_default = 'sqlite:///:memory:'

@@ -40,7 +40,10 @@ class Recorder:
         self.record_all = all
 
         if self.record_all:
+            rospy.loginfo('saving all topics')
             assert len(self.topics)==0
+        else:
+            rospy.loginfo('saving topics %r'%self.topics)
 
         self.q = Queue.Queue()
 
