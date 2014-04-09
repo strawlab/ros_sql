@@ -16,11 +16,8 @@ def get_topics( topics_cli ):
         return topics_cli
     else:
         topics = rospy.get_param('~topics',None)
-        if topics is None:
-            n = rospy.get_name()+"/topics"
-            topics = [t.replace(n,"") for t in rospy.get_param_names() if t.startswith(n)]
-            if len(topics):
-                rospy.logwarn('old API usage: setting topics via multiple ROS parameters')
+        if not isinstance(topics, list):
+            raise ValueError('Old API: ~topics param must be a list of topic paths')
         return topics
 
 def get_bind_url( bind_url_cli ):
