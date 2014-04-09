@@ -2,6 +2,7 @@
 import argparse
 import sys, time
 import Queue
+import socket
 import sqlalchemy
 import numpy as np
 
